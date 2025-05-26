@@ -1,0 +1,176 @@
+use std::{fs::File, io::BufReader, path::PathBuf, sync::{mpsc::channel, Arc, Mutex}, thread, time::Duration};
+
+use rodio::{Decoder, OutputStream, Sink, Source};
+
+pub struct Player {
+    pub current_track: Option<Track>,
+    pub queue: Vec<Track>,
+    in_cmd: std::sync::mpsc::Sender<PlayerCommand>,
+    pub out_evt: Arc<Mutex<std::sync::mpsc::Receiver<PlayerEvent>>>,
+}
+
+pub enum PlayerCommand {
+    Play(Track),
+    Pause,
+    Stop,
+    Seek(f32),
+    SetVolume(f32),
+    SetMuted(bool),
+}
+
+#[derive(Debug, Clone)]
+pub enum PlayerEvent {
+    Progress(f64),
+    End,
+    // TrackChanged(Option<Track>),
+    // Error(String),
+}
+
+impl Player {
+    pub fn new() -> Self {
+        let (in_cmd, out_cmd) = channel::<PlayerCommand>();
+        let (in_evt, out_evt) = channel::<PlayerEvent>();
+        thread::spawn(move || {
+            let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+            let sink = Sink::try_new(&stream_handle).unwrap();
+            let mut current_duration = 0.0;
+            let mut global_volume = 1.0; // Default volume, adjust as needed
+            loop {
+                if let Ok(cmd) = out_cmd.try_recv() {
+                    match cmd {
+                        PlayerCommand::Play(track) => {            
+                            let path = track.file_path.clone();
+                            if path.is_empty() {
+                                println!("No file set");
+                                continue;
+                            }
+                            let path = PathBuf::from(path);
+                            if !path.exists() {
+                                println!("File does not exist: {}", path.display());
+                                continue;
+                            }
+                            let file = File::open(&path).unwrap();
+                            let source = Decoder::new(BufReader::new(file)).unwrap();
+                            current_duration = source.total_duration().map(|d| d.as_secs_f32()).unwrap_or(0.0);
+                            println!("Playing track: {}", current_duration);
+                            sink.append(source);
+                            sink.play();
+                        },
+                        PlayerCommand::Seek(pos) => {
+                            sink.try_seek(Duration::from_secs_f32(pos * current_duration)).unwrap_or_else(|_| {
+                                println!("Failed to seek to position: {}", pos);
+                            });
+                        },
+                        PlayerCommand::Stop => {
+                            sink.clear();
+                            current_duration = 0.0;
+                        },
+                        PlayerCommand::Pause => {
+                            if sink.is_paused() {
+                                sink.play();
+                            } else {
+                                sink.pause();
+                            }
+                        },
+                        PlayerCommand::SetVolume(volume) => {
+                            sink.set_volume(volume);
+                            global_volume = volume;
+                        },
+                        PlayerCommand::SetMuted(muted) => {
+                            if muted {
+                                sink.set_volume(0.0);
+                            } else {
+                                sink.set_volume(global_volume); // Default volume, adjust as needed
+                            }
+                        },
+                    }
+                }
+                if sink.empty() && current_duration > 0.0 {
+                    current_duration = 0.0;
+                } else if !sink.empty() {
+                    // Emit progress event based on current position
+                    let position = sink.get_pos().as_secs_f32() / current_duration;
+                    in_evt.send(PlayerEvent::Progress(position.into())).unwrap();
+                }
+                thread::sleep(std::time::Duration::from_millis(10)); // Polling interval
+            }
+        });
+        Player {
+            current_track: None,
+            queue: Vec::new(),
+            in_cmd,
+            out_evt: Arc::new(Mutex::new(out_evt)),
+        }
+    }
+
+    pub fn add_track(&mut self, track: Track) {
+        self.queue.push(track);
+    }
+
+    pub fn play(&mut self) {
+        if self.queue.is_empty() {
+            println!("No tracks in the queue to play.");
+            return;
+        }
+        if self.current_track.is_none() {
+            self.current_track = Some(self.queue.remove(0));
+        } else {
+            self.in_cmd.send(PlayerCommand::Stop).unwrap_or_else(|e| {
+                panic!("Failed to send stop command: {}", e);
+            });
+            // .expect("Failed to send stop command");
+            self.current_track = Some(self.queue.remove(0));
+        }
+        if let Some(track) = &self.current_track {
+            let file_path = track.file_path.clone();
+            let cmd = PlayerCommand::Play(track.clone());
+            self.in_cmd.send(cmd).expect("Failed to send play command");
+            println!("Playing track: {}", file_path);
+        } else {
+            println!("No track is currently set to play.");
+        }
+    }
+
+    pub fn seek(&mut self, pos: f32) {
+        if self.current_track.is_some() {
+            let cmd = PlayerCommand::Seek(pos);
+            self.in_cmd.send(cmd).expect("Failed to send seek command");
+            println!("Seeking to position: {}", pos);
+        } else {
+            println!("No track is currently set to seek.");
+        }
+    }
+
+    pub fn pause(&mut self) {
+        let cmd = PlayerCommand::Pause;
+        self.in_cmd.send(cmd).expect("Failed to send pause command");
+        println!("Pause command sent.");
+    }
+
+    pub fn set_volume(&mut self, volume: f32) {
+        let cmd = PlayerCommand::SetVolume(volume);
+        self.in_cmd.send(cmd).expect("Failed to send set volume command");
+        println!("Volume set to: {}", volume);
+    }
+
+    pub fn set_muted(&mut self, muted: bool) {
+        let cmd = PlayerCommand::SetMuted(muted);
+        self.in_cmd.send(cmd).expect("Failed to send set muted command");
+        println!("Muted set to: {}", muted);
+    }
+
+    pub fn out_evt_receiver(&self) -> Arc<Mutex<std::sync::mpsc::Receiver<PlayerEvent>>> {
+        self.out_evt.clone()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Track {
+    pub file_path: String,
+}
+
+impl Default for Player {
+    fn default() -> Self {
+        Player::new()
+    }
+}

@@ -1,0 +1,16 @@
+[package]
+name = "vibrance"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+
+[dependencies]
+lazy_static = "1.5.0"
+qmetaobject = "0.2.10"
+rayon = "1.10.0"
+rodio = "0.20.1"
+tokio = "1.45.1"
+
+[build-dependencies]
+cpp_build = "0.5.10"
+winres = "0.1.12"
