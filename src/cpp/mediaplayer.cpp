@@ -1,4 +1,5 @@
 #include "mediaplayer.h"
+#include "volumeflyout.h"
 #include "../../target/cxxbridge/vibrance/src/main.rs.h"
 
 MediaPlayer::MediaPlayer(QWidget *parent)
@@ -49,7 +50,7 @@ void MediaPlayer::setupUi()
     font.setFamilies({QString::fromUtf8("HONOR Sans CN")});
     font.setPointSize(16);
     trackTitle->setFont(font);
-    trackTitle->setText("Track Title"); // Default text, can be set later
+    trackTitle->setText("Track Title");
     horizontalLayout->addWidget(trackTitle);
     verticalLayout_2 = new QVBoxLayout();
     verticalLayout_2->setObjectName("verticalLayout_2");
@@ -60,16 +61,31 @@ void MediaPlayer::setupUi()
     QFont font1;
     font1.setFamilies({QString::fromUtf8("HONOR Sans")});
     pushButton_2->setFont(font1);
-    pushButton_2->setText("Play/Pause"); // Default text, can be set later
-        // Connect the button to a lambda that opens a file dialog
+    pushButton_2->setText("Play/Pause");
     connect(pushButton_2, &QPushButton::clicked, this, [this]() {
         pause();
     });
     horizontalLayout_2->addWidget(pushButton_2);
     pushButton = new QPushButton(this);
     pushButton->setObjectName("pushButton");
-    pushButton->setText("Stop"); // Default text, can be set later
+    pushButton->setText("Stop");
     horizontalLayout_2->addWidget(pushButton);
+    volumeButton = new QToolButton(this);
+    volumeButton->setObjectName("volumeButton");
+    volumeButton->setText("Volume");
+    horizontalLayout_2->addWidget(volumeButton);
+    volumeFlyout = new VolumeFlyout(this);
+    volumeFlyout->setWindowFlags(Qt::Popup);
+    connect(volumeButton, &QToolButton::clicked, this, [this]() {
+        if (volumeFlyout->isVisible()) {
+            volumeFlyout->hide();
+        } else {
+            QPoint globalPos = volumeButton->mapToGlobal(QPoint(0, volumeButton->height()));
+            volumeFlyout->move(globalPos.x(), globalPos.y());
+            volumeFlyout->show();
+            volumeFlyout->raise();
+        }
+    });
     verticalLayout_2->addLayout(horizontalLayout_2);
 
 

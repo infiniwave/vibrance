@@ -12,6 +12,8 @@
 #include <QMetaObject>
 #include <QObject>
 #include <string>
+#include <QToolButton>
+#include "volumeflyout.h" 
 
 class MediaPlayer : public QWidget
 {
@@ -34,6 +36,8 @@ private:
     QHBoxLayout *trackProgressContainer;
     QLabel *elapsedDuration;
     QLabel *totalDuration;
+    QToolButton *volumeButton;
+    VolumeFlyout *volumeFlyout;
 
     void setupUi();
 
