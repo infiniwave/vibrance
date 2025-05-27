@@ -27,6 +27,8 @@ pub enum PlayerCommand {
 pub enum PlayerEvent {
     TrackLoaded(Track),
     Progress(f64),
+    Paused,
+    Resumed,
     End,
     // QueueEnd,
     // TrackChanged(Option<Track>),
@@ -81,8 +83,14 @@ impl Player {
                         PlayerCommand::Pause => {
                             if sink.is_paused() {
                                 sink.play();
+                                in_evt.send(PlayerEvent::Resumed).unwrap_or_else(|_| {
+                                    println!("Failed to send unpause event");
+                                });
                             } else {
                                 sink.pause();
+                                in_evt.send(PlayerEvent::Paused).unwrap_or_else(|_| {
+                                    println!("Failed to send pause event");
+                                });
                             }
                         },
                         PlayerCommand::SetVolume(volume) => {

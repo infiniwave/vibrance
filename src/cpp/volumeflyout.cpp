@@ -24,3 +24,8 @@ void VolumeFlyout::setupUi()
 
     connect(slider, &QSlider::valueChanged, this, &VolumeFlyout::volumeChanged);
 }
+
+void VolumeFlyout::initializeVolume(int initialVolume)
+{
+    slider->setValue(initialVolume);
+}

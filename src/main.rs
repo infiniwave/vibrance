@@ -7,8 +7,8 @@ use std::sync::Mutex;
 use cxx;
 use once_cell::sync::OnceCell;
 use player::{Player, PlayerEvent};
-use preferences::read_preferences;
-use souvlaki::MediaControls;
+use preferences::{read_preferences, Preferences};
+use souvlaki::{MediaControls, MediaPlayback};
 
 unsafe extern "C" {
     unsafe fn get_mainwindow_hwnd() -> *mut std::ffi::c_void;
@@ -22,18 +22,21 @@ mod ffi {
         unsafe fn get_mainwindow_mediaplayer() -> usize;
         unsafe fn mediaplayer_set_progress(mediaplayer: usize, value: f64);
         unsafe fn mediaplayer_set_track(mediaplayer: usize, title: String, artists: String, album: String, duration: f64);
-        // unsafe fn mediaplayer_set_paused(mediaplayer: usize, paused: bool);
+        unsafe fn mediaplayer_set_paused(mediaplayer: usize, paused: bool);
+        unsafe fn mediaplayer_set_volume(mediaplayer: usize, volume: i32);
     }
     extern "Rust" {
         fn process_audio_file(path: &str);
         fn open_media_directory(path: &str);
         fn pause();
         fn seek(duration: f64);
+        fn set_volume(volume: i32);
     }
 }
 
 static PLAYER: OnceCell<Mutex<Player>> = OnceCell::new();
 static CONTROLS: OnceCell<Mutex<MediaControls>> = OnceCell::new();
+static PREFERENCES: OnceCell<Preferences> = OnceCell::new();
 
 pub fn process_audio_file(path: &str) {
     println!("Rust received file path: {}", path);
@@ -59,6 +62,11 @@ pub fn seek(duration: f64) {
     player.seek(duration as f32);
 }
 
+pub fn set_volume(volume: i32) {
+    let mut player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
+    player.set_volume((volume as f32) / 100.0);
+}
+
 lazy_static::lazy_static! {
     static ref THREAD_POOL: rayon::ThreadPool = rayon::ThreadPoolBuilder::new().build().unwrap();
 }
@@ -69,6 +77,8 @@ pub fn run_threaded<F>(cb: F) where F: FnOnce() + Send + 'static {
 fn main() {
     // Read data from configuration
     let preferences = read_preferences().expect("Failed to read preferences");
+    PREFERENCES.set(preferences.clone()).expect("Failed to set preferences");
+    println!("Preferences loaded successfully.");
     // Initialize the player
     let player = Player::new();
     let recv = player.out_evt.clone();
@@ -126,6 +136,26 @@ fn main() {
                             );
                         }
                         // println!("Track loaded: {}", track.file_path);
+                    },
+                    PlayerEvent::Paused => {
+                        let media_player = unsafe { ffi::get_mainwindow_mediaplayer() };
+                        unsafe {
+                            ffi::mediaplayer_set_paused(media_player, true);
+                        }
+                        let mut controls = CONTROLS.get().expect("Media controls not initialized").lock().expect("Failed to lock media controls mutex");
+                        controls.set_playback(MediaPlayback::Paused { progress: None });
+                        drop(controls); 
+                        // println!("Playback paused: {}", paused);
+                    },
+                    PlayerEvent::Resumed => {
+                        let media_player = unsafe { ffi::get_mainwindow_mediaplayer() };
+                        unsafe {
+                            ffi::mediaplayer_set_paused(media_player, false);
+                        }
+                        let mut controls = CONTROLS.get().expect("Media controls not initialized").lock().expect("Failed to lock media controls mutex");
+                        controls.set_playback(MediaPlayback::Playing { progress: None });
+                        drop(controls);
+                        // println!("Playback resumed");
                     },
                 }
             }

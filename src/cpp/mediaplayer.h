@@ -47,6 +47,8 @@ signals:
 public slots:
     void setProgress(double value);
     void setTrack(std::string title, std::string artists, std::string album, double duration);
+    void initializeVolume(int initialVolume);
+    void setPaused(bool paused);
 };
 
 #endif // MEDIAPLAYER_H

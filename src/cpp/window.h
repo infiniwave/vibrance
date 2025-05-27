@@ -8,13 +8,11 @@
 extern "C" {
 #endif
 void show_widget_window(std::int32_t argc, std::int8_t** argv);
-// Expose getter for the main window's MediaPlayer
 std::uintptr_t get_mainwindow_mediaplayer();
-// Expose setter for MediaPlayer progress
 void mediaplayer_set_progress(std::uintptr_t mediaplayer, double value);
-// Expose setter for MediaPlayer track
 void mediaplayer_set_track(std::uintptr_t mediaplayer, rust::String title, rust::String artists, rust::String album, double duration);
-// Expose getter for the main window's HWND (Windows handle)
+void mediaplayer_set_paused(std::uintptr_t mediaplayer, bool paused);
+void mediaplayer_set_volume(std::uintptr_t mediaplayer, int value);
 void* get_mainwindow_hwnd();
 #ifdef __cplusplus
 }

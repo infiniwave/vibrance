@@ -42,7 +42,18 @@ void mediaplayer_set_track(std::uintptr_t mediaplayer, rust::String title, rust:
     }
 }
 
-// Return the HWND of the main window (Windows only)
+void mediaplayer_set_paused(std::uintptr_t mediaplayer, bool paused) {
+    if (mediaplayer) {
+        reinterpret_cast<MediaPlayer*>(mediaplayer)->setPaused(paused);
+    }
+}
+
+void mediaplayer_set_volume(std::uintptr_t mediaplayer, int value) {
+    if (mediaplayer) {
+        reinterpret_cast<MediaPlayer*>(mediaplayer)->initializeVolume(value);
+    }
+}
+
 void* get_mainwindow_hwnd() {
 #ifdef _WIN32
     if (g_mainwindow != nullptr) {

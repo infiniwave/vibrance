@@ -86,6 +86,9 @@ void MediaPlayer::setupUi()
             volumeFlyout->raise();
         }
     });
+    connect(volumeFlyout, &VolumeFlyout::volumeChanged, this, [this](int value) {
+        set_volume(value);
+    });
     verticalLayout_2->addLayout(horizontalLayout_2);
 
 
@@ -139,4 +142,18 @@ void MediaPlayer::setTrack(std::string title, std::string artists, std::string a
     trackTitle->setText(QString::fromStdString(title));
     totalDuration->setText(QString::fromStdString(formatDuration(duration)));
     trackLength = duration;
+}
+
+void MediaPlayer::initializeVolume(int initialVolume) {
+    if (volumeFlyout) {
+        volumeFlyout->initializeVolume(initialVolume);
+    }
+}
+
+void MediaPlayer::setPaused(bool paused) {
+    if (paused) {
+        pushButton_2->setText("Play");
+    } else {
+        pushButton_2->setText("Pause");
+    }
 }
