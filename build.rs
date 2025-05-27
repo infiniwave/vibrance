@@ -1,4 +1,6 @@
 fn main() {
+    // TODO: linux support
+    
     // execute moc on all header files
     let moc_files = glob::glob("src/**/*.h")
         .expect("Failed to read glob pattern")
@@ -17,6 +19,19 @@ fn main() {
             panic!("moc failed: {}", String::from_utf8_lossy(&output.stderr));
         }
     }
+
+    // generate C++ source from Qt resource file using rcc
+    let rcc_status = std::process::Command::new("C:/Qt/6.9.0/msvc2022_64/bin/rcc")
+        .arg("-name").arg("resources")
+        .arg("-o")
+        .arg("src/cpp/qrc_resources.cpp")
+        .arg("resources/resources.qrc")
+        .status()
+        .expect("Failed to run rcc (Qt Resource Compiler)");
+    if !rcc_status.success() {
+        panic!("rcc failed");
+    }
+
     // collect all cpp files
     let moc_files = glob::glob("src/**/*.cpp")
         .expect("Failed to read glob pattern")
@@ -42,7 +57,7 @@ fn main() {
     println!("cargo:rerun-if-changed=src/**/*.h");
     println!("cargo:rerun-if-changed=src/**/*.cpp");
     let mut res = winres::WindowsResource::new();
-    // res.set_icon("resources/app_icon.ico");
+    res.set_icon("resources/app.ico");
     res.set("FileVersion", env!("CARGO_PKG_VERSION"));
     res.set("ProductVersion", env!("CARGO_PKG_VERSION"));
     res.set("ProductName", "Vibrance");

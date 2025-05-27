@@ -1,13 +1,17 @@
 #include "window.h"
 #include <QApplication>
+#include <QIcon>
 #include "mainwindow.h"
+#include <QtCore/QResource>
 
 static MainWindow* g_mainwindow = nullptr;
 
 void show_widget_window(std::int32_t argc, std::int8_t** argv) {
+    Q_INIT_RESOURCE(resources);
     QApplication app(argc, reinterpret_cast<char**>(argv));
     MainWindow window;
     g_mainwindow = &window;
+    window.setWindowIcon(QIcon(":/app.ico"));
     window.setWindowTitle("Qt MediaPlayer Widget from Rust");
     window.resize(800, 600); // match the UI default size
     window.show();
