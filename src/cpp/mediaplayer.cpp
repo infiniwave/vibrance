@@ -92,3 +92,10 @@ void MediaPlayer::setProgress(double value) {
         trackProgress->setValue(int(value* 100000));
     }
 }
+
+void MediaPlayer::setTrack(std::string title) {
+    QString qTitle = QString::fromStdString(title);
+    if (trackTitle) {
+        trackTitle->setText(qTitle);
+    }
+}

@@ -21,6 +21,7 @@ pub enum PlayerCommand {
 
 #[derive(Debug, Clone)]
 pub enum PlayerEvent {
+    TrackLoaded(String),
     Progress(f64),
     End,
     // TrackChanged(Option<Track>),
@@ -50,6 +51,9 @@ impl Player {
                                 println!("File does not exist: {}", path.display());
                                 continue;
                             }
+                            in_evt.send(PlayerEvent::TrackLoaded(path.file_name().unwrap().to_str().unwrap().to_string())).unwrap_or_else(|_| {
+                                println!("Failed to send track loaded event");
+                            });
                             let file = File::open(&path).unwrap();
                             let source = Decoder::new(BufReader::new(file)).unwrap();
                             current_duration = source.total_duration().map(|d| d.as_secs_f32()).unwrap_or(0.0);

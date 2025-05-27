@@ -11,6 +11,7 @@
 #include <QFont>
 #include <QMetaObject>
 #include <QObject>
+#include <string>
 
 class MediaPlayer : public QWidget
 {
@@ -38,6 +39,7 @@ signals:
 
 public slots:
     void setProgress(double value);
+    void setTrack(std::string title);
 };
 
 #endif // MEDIAPLAYER_H

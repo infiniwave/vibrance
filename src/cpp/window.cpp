@@ -9,7 +9,7 @@ void show_widget_window(std::int32_t argc, std::int8_t** argv) {
     MainWindow window;
     g_mainwindow = &window;
     window.setWindowTitle("Qt MediaPlayer Widget from Rust");
-    window.resize(1021, 150); // match the UI default size
+    window.resize(800, 600); // match the UI default size
     window.show();
     app.exec();
     g_mainwindow = nullptr;
@@ -25,5 +25,11 @@ std::uintptr_t get_mainwindow_mediaplayer() {
 void mediaplayer_set_progress(std::uintptr_t mediaplayer, double value) {
     if (mediaplayer) {
         reinterpret_cast<MediaPlayer*>(mediaplayer)->setProgress(value);
+    }
+}
+
+void mediaplayer_set_track(std::uintptr_t mediaplayer, rust::cxxbridge1::String title) {
+    if (mediaplayer) {
+        reinterpret_cast<MediaPlayer*>(mediaplayer)->setTrack(std::string(title));
     }
 }

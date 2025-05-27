@@ -1,3 +1,4 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 pub mod player;
 use std::sync::Mutex;
 
@@ -12,6 +13,7 @@ mod ffi {
         unsafe fn show_widget_window(argc: i32, argv: *mut *mut i8);
         unsafe fn get_mainwindow_mediaplayer() -> usize;
         unsafe fn mediaplayer_set_progress(mediaplayer: usize, value: f64);
+        unsafe fn mediaplayer_set_track(mediaplayer: usize, track: String);
     }
     extern "Rust" {
         fn process_audio_file(path: &str);
@@ -75,6 +77,13 @@ fn main() {
                     PlayerEvent::End => {
                         println!("Playback ended");
                         // play(());
+                    },
+                    PlayerEvent::TrackLoaded(track) => {
+                        let media_player = unsafe { ffi::get_mainwindow_mediaplayer() };
+                        unsafe {
+                            ffi::mediaplayer_set_track(media_player, track);
+                        }
+                        // println!("Track loaded: {}", track.file_path);
                     },
                 }
             }
