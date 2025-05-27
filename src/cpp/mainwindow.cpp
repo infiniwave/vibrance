@@ -85,18 +85,10 @@ void MainWindow::setupUi()
 
     verticalLayout_3 = new QVBoxLayout();
     verticalLayout_3->setObjectName("verticalLayout_3");
-    scrollArea = new QScrollArea(centralwidget);
-    scrollArea->setObjectName("scrollArea");
-    scrollArea->setWidgetResizable(true);
-    scrollAreaWidgetContents = new QWidget();
-    scrollAreaWidgetContents->setObjectName("scrollAreaWidgetContents");
-    scrollAreaWidgetContents->setGeometry(QRect(0, 0, 576, 386));
-    listView = new QListView(scrollAreaWidgetContents);
-    listView->setObjectName("listView");
-    listView->setGeometry(QRect(120, 100, 256, 192));
-    scrollArea->setWidget(scrollAreaWidgetContents);
-
-    verticalLayout_3->addWidget(scrollArea);
+    trackList = new QListWidget();
+    trackList->setObjectName("trackList");
+    
+    verticalLayout_3->addWidget(trackList);
 
 
     horizontalLayout->addLayout(verticalLayout_3);

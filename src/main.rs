@@ -36,13 +36,18 @@ mod ffi {
 
 static PLAYER: OnceCell<Mutex<Player>> = OnceCell::new();
 static CONTROLS: OnceCell<Mutex<MediaControls>> = OnceCell::new();
-static PREFERENCES: OnceCell<Preferences> = OnceCell::new();
+static PREFERENCES: OnceCell<Mutex<Preferences>> = OnceCell::new();
 
 pub fn process_audio_file(path: &str) {
     println!("Rust received file path: {}", path);
     
     let mut player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
     let track = player.resolve_track(path.to_string()).expect("Failed to resolve track");
+    let preferences = PREFERENCES.get().expect("Preferences not initialized");
+    let mut preferences = preferences.lock().expect("Failed to lock preferences mutex");
+    preferences.add_unorganized_track(track.clone());
+    preferences.save().expect("Failed to save preferences");
+    drop(preferences);
     player.add_track(track);
     player.play();
     println!("Track added and playback started.");
@@ -50,6 +55,7 @@ pub fn process_audio_file(path: &str) {
 
 pub fn open_media_directory(path: &str) {
     println!("Rust received directory path: {}", path);
+    // iterate over all audio files in the directory 
 }
 
 pub fn pause() {
@@ -77,7 +83,7 @@ pub fn run_threaded<F>(cb: F) where F: FnOnce() + Send + 'static {
 fn main() {
     // Read data from configuration
     let preferences = read_preferences().expect("Failed to read preferences");
-    PREFERENCES.set(preferences.clone()).expect("Failed to set preferences");
+    PREFERENCES.set(Mutex::new(preferences.clone())).expect("Failed to set preferences");
     println!("Preferences loaded successfully.");
     // Initialize the player
     let player = Player::new();

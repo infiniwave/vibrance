@@ -22,6 +22,40 @@ impl Default for Preferences {
     }
 }
 
+impl Preferences {
+    pub fn save(&self) -> Result<()> {
+        let data = dirs::config_dir().ok_or(anyhow::anyhow!("Could not find config directory"))?;
+        let config_path = data.join("Vibrance").join("vibrance.json");
+        std::fs::create_dir_all(config_path.parent().ok_or(anyhow::anyhow!("Could not find parent directory"))?)?;
+        std::fs::write(&config_path, serde_json::to_string(self)?)?;
+        Ok(())
+    }
+    pub fn add_track_to_library(&mut self, folder: String, track: Track) {
+        self.user_library.entry(folder).or_default().insert(track.id.clone(), track);
+    }
+    pub fn add_unorganized_track(&mut self, track: Track) {
+        // check if the track already exists by file name
+        let existing_track = self.unorganized_tracks.iter().find(|(_, t)| 
+            t.sources.iter().any(|source| 
+                if let crate::player::TrackSource::File(path) = source {
+                    if let crate::player::TrackSource::File(existing_path) = &track.sources[0] {
+                        existing_path == path
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            )
+        );
+        if let Some((_, existing_track)) = existing_track {
+            // ignore if the track already exists
+            return;
+        }
+        self.unorganized_tracks.insert(track.id.clone(), track);
+    }
+}
+
 pub fn read_preferences() -> Result<Preferences> {
     let data = dirs::config_dir().ok_or(anyhow::anyhow!("Could not find config directory"))?;
     let config_path = data.join("Vibrance").join("vibrance.json");

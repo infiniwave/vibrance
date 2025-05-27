@@ -6,11 +6,10 @@
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QLabel>
-#include <QtWidgets/QListView>
+#include <QtWidgets/QListWidget>
 #include <QtWidgets/QMainWindow>
 #include <QtWidgets/QMenuBar>
 #include <QtWidgets/QPushButton>
-#include <QtWidgets/QScrollArea>
 #include <QtWidgets/QSpacerItem>
 #include <QtWidgets/QStatusBar>
 #include <QtWidgets/QVBoxLayout>
@@ -41,9 +40,7 @@ private:
     QPushButton *openMediaDirectoryButton;
     QSpacerItem *verticalSpacer;
     QVBoxLayout *verticalLayout_3;
-    QScrollArea *scrollArea;
-    QWidget *scrollAreaWidgetContents;
-    QListView *listView;
+    QListWidget *trackList;
     MediaPlayer *widget;
     QMenuBar *menubar;
     QStatusBar *statusbar;
