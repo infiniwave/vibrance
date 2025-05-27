@@ -14,7 +14,7 @@ class TrackItem : public QWidget
     Q_OBJECT
 
 public:
-    TrackItem(const QString &title, const QString &artist, const QString &albumArtPath, QWidget *parent = nullptr);
+    TrackItem(std::string id, const QString &title, const QString &artist, const QString &albumArtPath, QWidget *parent = nullptr);
     ~TrackItem();
 
 private:

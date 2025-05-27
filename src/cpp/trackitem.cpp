@@ -1,6 +1,7 @@
 #include "trackitem.h"
+#include "../../target/cxxbridge/vibrance/src/main.rs.h"
 
-TrackItem::TrackItem(const QString &title, const QString &artist, const QString &albumArtPath, QWidget *parent)
+TrackItem::TrackItem(std::string id, const QString &title, const QString &artist, const QString &albumArtPath, QWidget *parent)
     : QWidget(parent)
 {
     layout = new QHBoxLayout(this);
@@ -15,14 +16,18 @@ TrackItem::TrackItem(const QString &title, const QString &artist, const QString 
     textLayout = new QVBoxLayout;
     titleLabel = new QLabel(title);
     artistLabel = new QLabel(artist);
-    artistLabel->setStyleSheet("color: gray;");
+    titleLabel->setStyleSheet("font-weight: bold; color: white; background-color: transparent;");
+    artistLabel->setStyleSheet("color: gray; background-color: transparent;");
     textLayout->addWidget(titleLabel);
     textLayout->addWidget(artistLabel);
     layout->addLayout(textLayout);
 
     // Spacer and Play Button
     layout->addStretch();
-    playButton = new QPushButton("play");
+    playButton = new QPushButton("Play");
+    connect(playButton, &QPushButton::clicked, this, [id]() {
+        play(id); // Call the Rust function to play the track
+    });
     layout->addWidget(playButton);
 
     setLayout(layout);

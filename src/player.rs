@@ -225,6 +225,14 @@ impl Player {
             sources: vec![TrackSource::File(path.to_string_lossy().to_string())],
         })
     }
+
+    pub fn clear_queue(&mut self) {
+        self.queue.clear();
+        self.current_track = None;
+        let cmd = PlayerCommand::Stop;
+        self.in_cmd.send(cmd).expect("Failed to send stop command");
+        println!("Queue cleared and playback stopped.");
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -2,6 +2,7 @@
 #include <QPainter>
 #include <QRadialGradient>
 #include "mainwindow.h"
+#include "trackitem.h"
 #include "../../target/cxxbridge/vibrance/src/main.rs.h"
 
 MainWindow::MainWindow(QWidget *parent)
@@ -131,6 +132,14 @@ void MainWindow::showEvent(QShowEvent *event)
 {
     static bool initialized = false;
     if (!initialized) {
+        auto tracks = get_track_list();
+        for (const auto& track : tracks) {
+            QListWidgetItem* item = new QListWidgetItem(trackList);
+            TrackItem* trackWidget = new TrackItem(std::string(track.id), QString::fromStdString(std::string(track.title)), QString::fromStdString(std::string(track.artists)), QString::fromStdString(std::string(track.album_art_path)));
+            item->setSizeHint(trackWidget->sizeHint());
+            trackList->addItem(item);
+            trackList->setItemWidget(item, trackWidget);
+        }
         initialize_controls();
         initialized = true;
     }

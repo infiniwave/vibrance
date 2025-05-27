@@ -33,11 +33,57 @@ mod ffi {
         fn set_volume(volume: i32);
         fn get_initial_volume() -> i32;
         fn initialize_controls();
+        fn get_track_list() -> Vec<TrackInfo>;
+        fn play(id: &str);
+    }
+
+    #[derive(Debug)]
+    struct TrackInfo {
+        id: String,
+        title: String,
+        artists: String,
+        album: String,
+        album_art_path: String,
+        duration: f64,
     }
 }
 
 static PLAYER: OnceCell<Mutex<Player>> = OnceCell::new();
 static CONTROLS: OnceCell<Mutex<MediaControls>> = OnceCell::new();
+// TODO: periodically save preferences to disk
+
+pub fn play(id: &str) {
+    let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
+    let track = preferences.unorganized_tracks.get(id).expect("Track not found in unorganized tracks").clone();
+    drop(preferences);
+    let mut player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
+    player.clear_queue();
+    player.add_track(track);
+    player.play();
+    println!("Playback started for track with ID: {}", id);
+}
+
+pub fn get_track_list() -> Vec<ffi::TrackInfo> {
+    let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
+    let tracks = preferences.unorganized_tracks.values().collect::<Vec<_>>();
+    
+    
+    tracks.iter().map(|track| {
+        let artists = if track.artists.is_empty() {
+            "Unknown Artist".to_string()
+        } else {
+            track.artists.join(", ")
+        };
+        ffi::TrackInfo {
+            id: track.id.clone(),
+            title: track.title.clone().unwrap_or_else(|| "Unknown Title".to_string()),
+            artists,
+            album: track.album.clone().unwrap_or_else(|| "Unknown Album".to_string()),
+            album_art_path: "default_album_art.png".to_string(),
+            duration: track.duration.clone(),
+        }
+    }).collect()
+}
 
 pub fn initialize_controls() {
     // Initialize media controls if enabled in preferences
