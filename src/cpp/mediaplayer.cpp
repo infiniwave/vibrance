@@ -61,14 +61,21 @@ void MediaPlayer::setupUi()
     pushButton->setText("Stop"); // Default text, can be set later
     horizontalLayout_2->addWidget(pushButton);
     verticalLayout_2->addLayout(horizontalLayout_2);
+
+
+    trackProgressContainer = new QHBoxLayout();
+    trackProgressContainer->setObjectName("trackProgressContainer");
+    elapsedDuration = new QLabel(this);
+    elapsedDuration->setObjectName("elapsedDuration");
+    elapsedDuration->setText("00:00");
+    trackProgressContainer->addWidget(elapsedDuration, 0, Qt::AlignmentFlag::AlignLeft);
+
     trackProgress = new QSlider(this);
     trackProgress->setObjectName("trackProgress");
     trackProgress->setMaximumSize(QSize(16777215, 16777215));
     trackProgress->setOrientation(Qt::Orientation::Horizontal);
     trackProgress->setMinimum(0);
     trackProgress->setMaximum(100000); 
-    verticalLayout_2->addWidget(trackProgress);
-    // Connect slider signals for drag detection
     connect(trackProgress, &QSlider::sliderPressed, this, [this]() {
         isSliderBeingDragged = true;
         lastSliderValue = this->trackProgress->value();
@@ -80,6 +87,12 @@ void MediaPlayer::setupUi()
     connect(trackProgress, &QSlider::sliderMoved, this, [this](int value) {
         lastSliderValue = value;
     });
+    trackProgressContainer->addWidget(trackProgress);
+    totalDuration = new QLabel(this);
+    totalDuration->setObjectName("totalDuration");
+    totalDuration->setText("00:00");
+    trackProgressContainer->addWidget(totalDuration, 0, Qt::AlignmentFlag::AlignRight);
+    verticalLayout_2->addLayout(trackProgressContainer);
     horizontalLayout->addLayout(verticalLayout_2);
     horizontalLayout->setStretch(0, 2);
     horizontalLayout->setStretch(1, 5);

@@ -31,6 +31,9 @@ private:
     QPushButton *pushButton_2;
     QPushButton *pushButton;
     QSlider *trackProgress;
+    QHBoxLayout *trackProgressContainer;
+    QLabel *elapsedDuration;
+    QLabel *totalDuration;
 
     void setupUi();
 
