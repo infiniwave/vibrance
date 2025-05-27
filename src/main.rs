@@ -15,6 +15,8 @@ mod ffi {
     }
     extern "Rust" {
         fn process_audio_file(path: &str);
+        fn pause();
+        fn seek(duration: f64);
     }
 }
 
@@ -29,6 +31,16 @@ pub fn process_audio_file(path: &str) {
     });
     player.play();
     println!("Track added and playback started.");
+}
+
+pub fn pause() {
+    let mut player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
+    player.pause();
+}
+
+pub fn seek(duration: f64) {
+    let mut player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
+    player.seek(duration as f32);
 }
 
 lazy_static::lazy_static! {

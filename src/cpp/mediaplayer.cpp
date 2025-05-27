@@ -1,4 +1,5 @@
 #include "mediaplayer.h"
+#include "../../target/cxxbridge/vibrance/src/main.rs.h"
 
 MediaPlayer::MediaPlayer(QWidget *parent)
     : QWidget(parent)
@@ -10,6 +11,9 @@ MediaPlayer::~MediaPlayer()
 {
     // Qt will delete child widgets automatically
 }
+
+int lastSliderValue = 0;
+bool isSliderBeingDragged = false;
 
 void MediaPlayer::setupUi()
 {
@@ -47,6 +51,10 @@ void MediaPlayer::setupUi()
     font1.setFamilies({QString::fromUtf8("HONOR Sans")});
     pushButton_2->setFont(font1);
     pushButton_2->setText("Play/Pause"); // Default text, can be set later
+        // Connect the button to a lambda that opens a file dialog
+    connect(pushButton_2, &QPushButton::clicked, this, [this]() {
+        pause();
+    });
     horizontalLayout_2->addWidget(pushButton_2);
     pushButton = new QPushButton(this);
     pushButton->setObjectName("pushButton");
@@ -60,6 +68,18 @@ void MediaPlayer::setupUi()
     trackProgress->setMinimum(0);
     trackProgress->setMaximum(100000); 
     verticalLayout_2->addWidget(trackProgress);
+    // Connect slider signals for drag detection
+    connect(trackProgress, &QSlider::sliderPressed, this, [this]() {
+        isSliderBeingDragged = true;
+        lastSliderValue = this->trackProgress->value();
+    });
+    connect(trackProgress, &QSlider::sliderReleased, this, [this]() {
+        isSliderBeingDragged = false;
+        seek(lastSliderValue / 100000.0);
+    });
+    connect(trackProgress, &QSlider::sliderMoved, this, [this](int value) {
+        lastSliderValue = value;
+    });
     horizontalLayout->addLayout(verticalLayout_2);
     horizontalLayout->setStretch(0, 2);
     horizontalLayout->setStretch(1, 5);
@@ -68,7 +88,7 @@ void MediaPlayer::setupUi()
 
 void MediaPlayer::setProgress(double value) {
     emit progressChanged(value);
-    if (trackProgress) {
+    if (trackProgress && !isSliderBeingDragged) {
         trackProgress->setValue(int(value* 100000));
     }
 }
