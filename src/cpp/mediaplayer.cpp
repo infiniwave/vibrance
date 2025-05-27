@@ -156,11 +156,6 @@ void MediaPlayer::setTrack(std::string title, std::string artists, std::string a
     trackLength = duration;
 }
 
-void MediaPlayer::initializeVolume(int initialVolume) {
-    if (volumeFlyout) {
-        volumeFlyout->initializeVolume(initialVolume);
-    }
-}
 
 void MediaPlayer::setPaused(bool paused) {
     if (paused) {

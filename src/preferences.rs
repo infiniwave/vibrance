@@ -1,15 +1,19 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Mutex};
 
 use anyhow::Result;
+use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 
 use crate::player::Track;
+
+pub static PREFERENCES: OnceCell<Mutex<Preferences>> = OnceCell::new();
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Preferences {
     pub user_library: HashMap<String, HashMap<String, Track>>, // folder path -> (file name -> Track)
     pub unorganized_tracks: HashMap<String, Track>, // file name -> Track
     pub use_system_audio_controls: bool,
+    pub volume: f32, 
 }
 
 impl Default for Preferences {
@@ -18,6 +22,7 @@ impl Default for Preferences {
             user_library: HashMap::new(),
             unorganized_tracks: HashMap::new(),
             use_system_audio_controls: true,
+            volume: 0.5,
         }
     }
 }

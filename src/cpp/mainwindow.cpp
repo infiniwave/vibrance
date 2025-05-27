@@ -87,6 +87,7 @@ void MainWindow::setupUi()
     verticalLayout_3->setObjectName("verticalLayout_3");
     trackList = new QListWidget();
     trackList->setObjectName("trackList");
+    trackList->setStyleSheet("background: rgba(30, 30, 30, 0.5); color: white; border-radius: 8px;");
     
     verticalLayout_3->addWidget(trackList);
 
@@ -124,6 +125,16 @@ void MainWindow::paintEvent(QPaintEvent *event)
     gradient.setColorAt(1, QColor(15, 0, 60)); // Edge color
     painter.fillRect(rect, gradient);
     QMainWindow::paintEvent(event);
+}
+
+void MainWindow::showEvent(QShowEvent *event)
+{
+    static bool initialized = false;
+    if (!initialized) {
+        initialize_controls();
+        initialized = true;
+    }
+    QMainWindow::showEvent(event);
 }
 
 MediaPlayer* MainWindow::getMediaPlayer() {

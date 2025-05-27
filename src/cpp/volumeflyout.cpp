@@ -1,4 +1,5 @@
 #include "volumeflyout.h"
+#include "../../target/cxxbridge/vibrance/src/main.rs.h"
 
 VolumeFlyout::VolumeFlyout(QWidget *parent)
     : QWidget(parent)
@@ -19,13 +20,8 @@ void VolumeFlyout::setupUi()
     QVBoxLayout *layout = new QVBoxLayout(this);
     slider = new QSlider(Qt::Vertical);
     slider->setRange(0, 100);
-    slider->setValue(50);
+    slider->setValue(get_initial_volume()); 
     layout->addWidget(slider);
 
     connect(slider, &QSlider::valueChanged, this, &VolumeFlyout::volumeChanged);
-}
-
-void VolumeFlyout::initializeVolume(int initialVolume)
-{
-    slider->setValue(initialVolume);
 }

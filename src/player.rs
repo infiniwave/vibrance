@@ -6,6 +6,8 @@ use rodio::{Decoder, OutputStream, Sink, Source};
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
+use crate::PREFERENCES;
+
 #[derive(Debug, Clone)]
 pub struct Player {
     pub current_track: Option<Track>,
@@ -36,14 +38,15 @@ pub enum PlayerEvent {
 }
 
 impl Player {
-    pub fn new() -> Self {
+    pub fn new(volume: f32) -> Self {
         let (in_cmd, out_cmd) = channel::<PlayerCommand>();
         let (in_evt, out_evt) = channel::<PlayerEvent>();
         thread::spawn(move || {
             let (_stream, stream_handle) = OutputStream::try_default().unwrap();
             let sink = Sink::try_new(&stream_handle).unwrap();
             let mut current_duration = 0.0;
-            let mut global_volume = 1.0; // Default volume, adjust as needed
+            let mut global_volume = volume; 
+            sink.set_volume(global_volume);
             loop {
                 if let Ok(cmd) = out_cmd.try_recv() {
                     match cmd {
@@ -96,6 +99,11 @@ impl Player {
                         PlayerCommand::SetVolume(volume) => {
                             sink.set_volume(volume);
                             global_volume = volume;
+                            let mut preferences = PREFERENCES.get().expect("Preferences not initialized")
+                                .lock()
+                                .expect("Failed to lock preferences mutex");
+                            preferences.volume = volume;
+                            drop(preferences);
                         },
                         PlayerCommand::SetMuted(muted) => {
                             if muted {
@@ -232,10 +240,4 @@ pub struct Track {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum TrackSource {
     File(String)
-}
-
-impl Default for Player {
-    fn default() -> Self {
-        Player::new()
-    }
 }

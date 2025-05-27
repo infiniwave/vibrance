@@ -17,7 +17,6 @@ class VolumeFlyout : public QWidget
 public:
     VolumeFlyout(QWidget *parent = nullptr);
     ~VolumeFlyout();
-    void initializeVolume(int initialVolume);
 
 private:
     // UI elements

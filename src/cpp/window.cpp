@@ -48,11 +48,6 @@ void mediaplayer_set_paused(std::uintptr_t mediaplayer, bool paused) {
     }
 }
 
-void mediaplayer_set_volume(std::uintptr_t mediaplayer, int value) {
-    if (mediaplayer) {
-        reinterpret_cast<MediaPlayer*>(mediaplayer)->initializeVolume(value);
-    }
-}
 
 void* get_mainwindow_hwnd() {
 #ifdef _WIN32
