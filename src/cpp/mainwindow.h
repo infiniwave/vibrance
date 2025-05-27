@@ -38,6 +38,7 @@ private:
     QVBoxLayout *verticalLayout_2;
     QLabel *label;
     QPushButton *pushButton;
+    QPushButton *openMediaDirectoryButton;
     QSpacerItem *verticalSpacer;
     QVBoxLayout *verticalLayout_3;
     QScrollArea *scrollArea;

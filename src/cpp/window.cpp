@@ -12,7 +12,7 @@ void show_widget_window(std::int32_t argc, std::int8_t** argv) {
     MainWindow window;
     g_mainwindow = &window;
     window.setWindowIcon(QIcon(":/app.ico"));
-    window.setWindowTitle("Qt MediaPlayer Widget from Rust");
+    window.setWindowTitle("Vibrance");
     window.resize(800, 600); // match the UI default size
     window.show();
     app.exec();

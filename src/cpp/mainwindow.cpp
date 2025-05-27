@@ -57,7 +57,24 @@ void MainWindow::setupUi()
         }
     });
 
+    openMediaDirectoryButton = new QPushButton(centralwidget);
+    openMediaDirectoryButton->setObjectName("openMediaDirectoryButton");
+    openMediaDirectoryButton->setText("Open media directory");
+    connect(openMediaDirectoryButton, &QPushButton::clicked, this, [this]() {
+        QString dir = QFileDialog::getExistingDirectory(
+            this,
+            tr("Open Media Directory"),
+            "",
+            QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks
+        );
+        if (!dir.isEmpty()) {
+            // Call the Rust function via cxx bridge (no rust:: namespace)
+            open_media_directory(dir.toStdString());
+        }
+    });
+
     verticalLayout_2->addWidget(pushButton, 0, Qt::AlignmentFlag::AlignTop);
+    verticalLayout_2->addWidget(openMediaDirectoryButton, 0, Qt::AlignmentFlag::AlignTop);
 
     verticalSpacer = new QSpacerItem(20, 40, QSizePolicy::Policy::Minimum, QSizePolicy::Policy::Expanding);
 

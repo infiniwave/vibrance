@@ -19,6 +19,7 @@ mod ffi {
     }
     extern "Rust" {
         fn process_audio_file(path: &str);
+        fn open_media_directory(path: &str);
         fn pause();
         fn seek(duration: f64);
     }
@@ -35,6 +36,10 @@ pub fn process_audio_file(path: &str) {
     });
     player.play();
     println!("Track added and playback started.");
+}
+
+pub fn open_media_directory(path: &str) {
+    println!("Rust received directory path: {}", path);
 }
 
 pub fn pause() {
