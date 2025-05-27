@@ -2,6 +2,7 @@ use std::{fs::File, io::BufReader, path::PathBuf, sync::{mpsc::channel, Arc, Mut
 
 use rodio::{Decoder, OutputStream, Sink, Source};
 
+#[derive(Debug, Clone)]
 pub struct Player {
     pub current_track: Option<Track>,
     pub queue: Vec<Track>,

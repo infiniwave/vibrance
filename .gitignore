@@ -1,1 +1,3 @@
 target
+flag_check.exe
+moc_*.cpp
