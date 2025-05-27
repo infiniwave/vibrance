@@ -28,6 +28,8 @@ private:
     QHBoxLayout *horizontalLayout;
     QFrame *frame;
     QLabel *trackTitle;
+    QLabel *trackArtists;
+    QVBoxLayout *trackDetails;
     QVBoxLayout *verticalLayout_2;
     QHBoxLayout *horizontalLayout_2;
     QPushButton *pushButton_2;

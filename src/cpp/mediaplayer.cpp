@@ -51,7 +51,18 @@ void MediaPlayer::setupUi()
     font.setPointSize(16);
     trackTitle->setFont(font);
     trackTitle->setText("Track Title");
-    horizontalLayout->addWidget(trackTitle);
+    trackArtists = new QLabel(this);
+    trackArtists->setObjectName("trackArtists");
+    trackArtists->setMaximumSize(QSize(200, 16777215));
+    trackArtists->setText("Track Artists");
+    QPalette palette = trackArtists->palette();
+    palette.setColor(QPalette::WindowText, QColor(150, 150, 150));
+    trackArtists->setPalette(palette);
+    trackDetails = new QVBoxLayout();
+    trackDetails->setObjectName("trackDetails");
+    trackDetails->addWidget(trackTitle);
+    trackDetails->addWidget(trackArtists);
+    horizontalLayout->addLayout(trackDetails);
     verticalLayout_2 = new QVBoxLayout();
     verticalLayout_2->setObjectName("verticalLayout_2");
     horizontalLayout_2 = new QHBoxLayout();
@@ -140,6 +151,7 @@ void MediaPlayer::setProgress(double value) {
 
 void MediaPlayer::setTrack(std::string title, std::string artists, std::string album, double duration) {
     trackTitle->setText(QString::fromStdString(title));
+    trackArtists->setText(QString::fromStdString(artists));
     totalDuration->setText(QString::fromStdString(formatDuration(duration)));
     trackLength = duration;
 }

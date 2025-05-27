@@ -122,7 +122,7 @@ fn main() {
                         println!("Playback ended");
                         let mut player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
                         player.play();
-                        drop(player); // Release the lock after playing
+                        drop(player);
                     },
                     PlayerEvent::TrackLoaded(track) => {
                         let media_player = unsafe { ffi::get_mainwindow_mediaplayer() };
