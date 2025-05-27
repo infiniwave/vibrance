@@ -201,10 +201,17 @@ impl Player {
             None => tag.first_tag(),
         };
         let id = Ulid::new().to_string();
+        let mut artists = tag.map_or_else(Vec::new, |t| t.get_strings(&ItemKey::TrackArtists).map(String::from).collect());
+        if artists.is_empty() {
+            let artist = tag.and_then(|t| t.get_string(&ItemKey::TrackArtist).map(String::from));
+            if let Some(artist) = artist {
+                artists.push(artist);
+            }
+        }
         Ok(Track {
             id,
             title: tag.and_then(|t| t.get_string(&ItemKey::TrackTitle).map(String::from)),
-            artists: tag.map_or_else(Vec::new, |t| t.get_strings(&ItemKey::TrackArtists).map(String::from).collect()),
+            artists,
             album: tag.and_then(|t| t.get_string(&ItemKey::AlbumTitle).map(String::from)),
             duration: properties.duration().as_secs_f64(),
             sources: vec![TrackSource::File(path.to_string_lossy().to_string())],
