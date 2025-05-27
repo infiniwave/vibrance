@@ -32,8 +32,8 @@ void mediaplayer_set_progress(std::uintptr_t mediaplayer, double value) {
     }
 }
 
-void mediaplayer_set_track(std::uintptr_t mediaplayer, rust::cxxbridge1::String title) {
+void mediaplayer_set_track(std::uintptr_t mediaplayer, rust::String title, rust::String artists, rust::String album, double duration) {
     if (mediaplayer) {
-        reinterpret_cast<MediaPlayer*>(mediaplayer)->setTrack(std::string(title));
+        reinterpret_cast<MediaPlayer*>(mediaplayer)->setTrack(std::string(title), std::string(artists), std::string(album), duration);
     }
 }

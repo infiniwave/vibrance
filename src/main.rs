@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 use cxx;
 use once_cell::sync::OnceCell;
-use player::{Player, PlayerEvent, Track};
+use player::{Player, PlayerEvent};
 use preferences::read_preferences;
 
 #[cxx::bridge]
@@ -15,7 +15,7 @@ mod ffi {
         unsafe fn show_widget_window(argc: i32, argv: *mut *mut i8);
         unsafe fn get_mainwindow_mediaplayer() -> usize;
         unsafe fn mediaplayer_set_progress(mediaplayer: usize, value: f64);
-        unsafe fn mediaplayer_set_track(mediaplayer: usize, track: String);
+        unsafe fn mediaplayer_set_track(mediaplayer: usize, title: String, artists: String, album: String, duration: f64);
     }
     extern "Rust" {
         fn process_audio_file(path: &str);
@@ -31,9 +31,8 @@ pub fn process_audio_file(path: &str) {
     println!("Rust received file path: {}", path);
     
     let mut player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
-    player.add_track(Track {
-        file_path: path.to_string()
-    });
+    let track = player.resolve_track(path.to_string()).expect("Failed to resolve track");
+    player.add_track(track);
     player.play();
     println!("Track added and playback started.");
 }
@@ -85,12 +84,20 @@ fn main() {
                     },
                     PlayerEvent::End => {
                         println!("Playback ended");
-                        // play(());
+                        let mut player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
+                        player.play();
+                        drop(player); // Release the lock after playing
                     },
                     PlayerEvent::TrackLoaded(track) => {
                         let media_player = unsafe { ffi::get_mainwindow_mediaplayer() };
                         unsafe {
-                            ffi::mediaplayer_set_track(media_player, track);
+                            ffi::mediaplayer_set_track(
+                                media_player, 
+                                track.title.unwrap_or("Unknown Title".to_string()), 
+                                track.artists.join(", "), 
+                                track.album.unwrap_or_default(), 
+                                track.duration
+                            );
                         }
                         // println!("Track loaded: {}", track.file_path);
                     },

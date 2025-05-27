@@ -14,7 +14,17 @@ MediaPlayer::~MediaPlayer()
 
 int lastSliderValue = 0;
 bool isSliderBeingDragged = false;
+double trackLength = 0.0;
 
+// format seconds as mm:ss
+std::string formatDuration(double seconds) {
+    int totalSeconds = static_cast<int>(seconds);
+    int minutes = totalSeconds / 60;
+    int secs = totalSeconds % 60;
+    char buffer[16];
+    snprintf(buffer, sizeof(buffer), "%02d:%02d", minutes, secs);
+    return std::string(buffer);
+}
 void MediaPlayer::setupUi()
 {
     if (objectName().isEmpty())
@@ -87,6 +97,9 @@ void MediaPlayer::setupUi()
     connect(trackProgress, &QSlider::sliderMoved, this, [this](int value) {
         lastSliderValue = value;
     });
+    connect(trackProgress, &QSlider::valueChanged, this, [this](int value) {
+        this->elapsedDuration->setText(QString::fromStdString(formatDuration(value / 100000.0 * trackLength)));
+    });
     trackProgressContainer->addWidget(trackProgress);
     totalDuration = new QLabel(this);
     totalDuration->setObjectName("totalDuration");
@@ -106,9 +119,8 @@ void MediaPlayer::setProgress(double value) {
     }
 }
 
-void MediaPlayer::setTrack(std::string title) {
-    QString qTitle = QString::fromStdString(title);
-    if (trackTitle) {
-        trackTitle->setText(qTitle);
-    }
+void MediaPlayer::setTrack(std::string title, std::string artists, std::string album, double duration) {
+    trackTitle->setText(QString::fromStdString(title));
+    totalDuration->setText(QString::fromStdString(formatDuration(duration)));
+    trackLength = duration;
 }

@@ -1,14 +1,16 @@
 use std::{fs::File, io::BufReader, path::PathBuf, sync::{mpsc::channel, Arc, Mutex}, thread, time::Duration};
 
-use id3::{Tag, TagLike};
+use anyhow::Result;
+use lofty::{file::{AudioFile, TaggedFileExt}, probe::Probe, tag::ItemKey};
 use rodio::{Decoder, OutputStream, Sink, Source};
 use serde::{Deserialize, Serialize};
+use ulid::Ulid;
 
 #[derive(Debug, Clone)]
 pub struct Player {
     pub current_track: Option<Track>,
     pub queue: Vec<Track>,
-    in_cmd: std::sync::mpsc::Sender<PlayerCommand>,
+    pub in_cmd: std::sync::mpsc::Sender<PlayerCommand>,
     pub out_evt: Arc<Mutex<std::sync::mpsc::Receiver<PlayerEvent>>>,
 }
 
@@ -23,9 +25,10 @@ pub enum PlayerCommand {
 
 #[derive(Debug, Clone)]
 pub enum PlayerEvent {
-    TrackLoaded(String),
+    TrackLoaded(Track),
     Progress(f64),
     End,
+    // QueueEnd,
     // TrackChanged(Option<Track>),
     // Error(String),
 }
@@ -43,29 +46,22 @@ impl Player {
                 if let Ok(cmd) = out_cmd.try_recv() {
                     match cmd {
                         PlayerCommand::Play(track) => {            
-                            let path = track.file_path.clone();
-                            if path.is_empty() {
-                                println!("No file set");
-                                continue;
-                            }
-                            let path = PathBuf::from(path);
-                            if !path.exists() {
-                                println!("File does not exist: {}", path.display());
-                                continue;
-                            }
-                            let tag = Tag::read_from_path(&path).ok();
-                            let x = tag.map(|t| {
-                                if let Some(title) = t.title() {
-                                    title.to_string()
-                                } else {
-                                    path.file_name().unwrap().to_str().unwrap().to_string()
-                                }
-                            }).unwrap_or_else(|| {
-                                path.file_name().unwrap().to_str().unwrap().to_string()
-                            });
-                            in_evt.send(PlayerEvent::TrackLoaded(x)).unwrap_or_else(|_| {
+                            in_evt.send(PlayerEvent::TrackLoaded(track.clone())).unwrap_or_else(|_| {
                                 println!("Failed to send track loaded event");
                             });
+                            let path = match track.sources.first() {
+                                Some(TrackSource::File(path)) => {
+                                    if !PathBuf::from(path).exists() {
+                                        println!("Track file does not exist: {}", path);
+                                        continue;
+                                    }
+                                    path.clone()
+                                },
+                                _ => {
+                                    println!("No valid track source found");
+                                    continue;
+                                }
+                            };
                             let file = File::open(&path).unwrap();
                             let source = Decoder::new(BufReader::new(file)).unwrap();
                             current_duration = source.total_duration().map(|d| d.as_secs_f32()).unwrap_or(0.0);
@@ -104,6 +100,9 @@ impl Player {
                 }
                 if sink.empty() && current_duration > 0.0 {
                     current_duration = 0.0;
+                    in_evt.send(PlayerEvent::End).unwrap_or_else(|_| {
+                        println!("Failed to send end event");
+                    });
                 } else if !sink.empty() {
                     // Emit progress event based on current position
                     let position = sink.get_pos().as_secs_f32() / current_duration;
@@ -139,10 +138,9 @@ impl Player {
             self.current_track = Some(self.queue.remove(0));
         }
         if let Some(track) = &self.current_track {
-            let file_path = track.file_path.clone();
             let cmd = PlayerCommand::Play(track.clone());
             self.in_cmd.send(cmd).expect("Failed to send play command");
-            println!("Playing track: {}", file_path);
+            println!("Playing track: {:?}", track);
         } else {
             println!("No track is currently set to play.");
         }
@@ -179,11 +177,46 @@ impl Player {
     pub fn out_evt_receiver(&self) -> Arc<Mutex<std::sync::mpsc::Receiver<PlayerEvent>>> {
         self.out_evt.clone()
     }
+
+    pub fn resolve_track(&self, path: String) -> Result<Track> {
+        if path.is_empty() {
+            return Err(anyhow::anyhow!("Path is empty"));
+        }
+        let path = PathBuf::from(path);
+        if !path.exists() {
+            return Err(anyhow::anyhow!("File does not exist: {}", path.display()));
+        }
+        let tag = Probe::open(&path)?.read()?;
+        let properties = tag.properties();
+        let tag = match tag.primary_tag() {
+            Some(primary_tag) => Some(primary_tag),
+            None => tag.first_tag(),
+        };
+        let id = Ulid::new().to_string();
+        Ok(Track {
+            id,
+            title: tag.and_then(|t| t.get_string(&ItemKey::TrackTitle).map(String::from)),
+            artists: tag.map_or_else(Vec::new, |t| t.get_strings(&ItemKey::TrackArtists).map(String::from).collect()),
+            album: tag.and_then(|t| t.get_string(&ItemKey::AlbumTitle).map(String::from)),
+            duration: properties.duration().as_secs_f64(),
+            sources: vec![TrackSource::File(path.to_string_lossy().to_string())],
+        })
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Track {
-    pub file_path: String,
+    pub id: String,
+    pub title: Option<String>,
+    pub artists: Vec<String>,
+    pub album: Option<String>,
+    pub duration: f64,
+    pub sources: Vec<TrackSource>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum TrackSource {
+    File(String)
 }
 
 impl Default for Player {

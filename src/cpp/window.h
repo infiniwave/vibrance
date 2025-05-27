@@ -12,8 +12,8 @@ void show_widget_window(std::int32_t argc, std::int8_t** argv);
 std::uintptr_t get_mainwindow_mediaplayer();
 // Expose setter for MediaPlayer progress
 void mediaplayer_set_progress(std::uintptr_t mediaplayer, double value);
-// Expose setter for MediaPlayer track title
-void mediaplayer_set_track(std::uintptr_t mediaplayer, rust::cxxbridge1::String title);
+// Expose setter for MediaPlayer track
+void mediaplayer_set_track(std::uintptr_t mediaplayer, rust::String title, rust::String artists, rust::String album, double duration);
 #ifdef __cplusplus
 }
 #endif

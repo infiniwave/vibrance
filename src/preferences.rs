@@ -7,7 +7,8 @@ use crate::player::Track;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Preferences {
-    user_library: HashMap<String, Track>,
+    user_library: HashMap<String, HashMap<String, Track>>, // folder path -> (file name -> Track)
+    unorganized_tracks: HashMap<String, Track>, // file name -> Track
     use_system_audio_controls: bool,
 }
 
@@ -15,6 +16,7 @@ impl Default for Preferences {
     fn default() -> Self {
         Preferences {
             user_library: HashMap::new(),
+            unorganized_tracks: HashMap::new(),
             use_system_audio_controls: true,
         }
     }

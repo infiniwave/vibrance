@@ -42,7 +42,7 @@ signals:
 
 public slots:
     void setProgress(double value);
-    void setTrack(std::string title);
+    void setTrack(std::string title, std::string artists, std::string album, double duration);
 };
 
 #endif // MEDIAPLAYER_H
