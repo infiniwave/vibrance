@@ -14,6 +14,8 @@ std::uintptr_t get_mainwindow_mediaplayer();
 void mediaplayer_set_progress(std::uintptr_t mediaplayer, double value);
 // Expose setter for MediaPlayer track
 void mediaplayer_set_track(std::uintptr_t mediaplayer, rust::String title, rust::String artists, rust::String album, double duration);
+// Expose getter for the main window's HWND (Windows handle)
+void* get_mainwindow_hwnd();
 #ifdef __cplusplus
 }
 #endif

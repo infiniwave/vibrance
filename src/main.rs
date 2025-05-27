@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+pub mod controls;
 pub mod player;
 pub mod preferences;
 use std::sync::Mutex;
@@ -7,6 +8,11 @@ use cxx;
 use once_cell::sync::OnceCell;
 use player::{Player, PlayerEvent};
 use preferences::read_preferences;
+use souvlaki::MediaControls;
+
+unsafe extern "C" {
+    unsafe fn get_mainwindow_hwnd() -> *mut std::ffi::c_void;
+}
 
 #[cxx::bridge]
 mod ffi {
@@ -16,6 +22,7 @@ mod ffi {
         unsafe fn get_mainwindow_mediaplayer() -> usize;
         unsafe fn mediaplayer_set_progress(mediaplayer: usize, value: f64);
         unsafe fn mediaplayer_set_track(mediaplayer: usize, title: String, artists: String, album: String, duration: f64);
+        // unsafe fn mediaplayer_set_paused(mediaplayer: usize, paused: bool);
     }
     extern "Rust" {
         fn process_audio_file(path: &str);
@@ -26,6 +33,7 @@ mod ffi {
 }
 
 static PLAYER: OnceCell<Mutex<Player>> = OnceCell::new();
+static CONTROLS: OnceCell<Mutex<MediaControls>> = OnceCell::new();
 
 pub fn process_audio_file(path: &str) {
     println!("Rust received file path: {}", path);
@@ -64,6 +72,24 @@ fn main() {
     // Initialize the player
     let player = Player::new();
     let recv = player.out_evt.clone();
+
+    run_threaded(move || {
+        // Initialize media controls if enabled in preferences
+        if preferences.use_system_audio_controls {
+            while CONTROLS.get().is_none() {
+                // TODO: Implement a more robust way to wait for the controls to be initialized
+                // (currently, there is a chance of a segfault if Qt is not initialized yet)
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+                let controls = controls::initialize();
+                if let Ok(controls) = controls {
+                    CONTROLS.set(Mutex::new(controls)).expect("Failed to set media controls");
+                    println!("Media controls initialized successfully.");
+                }
+            }
+        } else {
+            println!("System audio controls are disabled in preferences.");
+        }
+    });
     // Initialize the player helper
     run_threaded(move || {
         let recv = recv.lock();

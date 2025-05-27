@@ -3,6 +3,10 @@
 #include <QIcon>
 #include "mainwindow.h"
 #include <QtCore/QResource>
+#include <QWidget>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 static MainWindow* g_mainwindow = nullptr;
 
@@ -36,4 +40,14 @@ void mediaplayer_set_track(std::uintptr_t mediaplayer, rust::String title, rust:
     if (mediaplayer) {
         reinterpret_cast<MediaPlayer*>(mediaplayer)->setTrack(std::string(title), std::string(artists), std::string(album), duration);
     }
+}
+
+// Return the HWND of the main window (Windows only)
+void* get_mainwindow_hwnd() {
+#ifdef _WIN32
+    if (g_mainwindow != nullptr) {
+        return reinterpret_cast<void*>(g_mainwindow->winId());
+    }
+#endif
+    return nullptr;
 }
