@@ -2,6 +2,7 @@ use std::{fs::File, io::BufReader, path::PathBuf, sync::{mpsc::channel, Arc, Mut
 
 use id3::{Tag, TagLike};
 use rodio::{Decoder, OutputStream, Sink, Source};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct Player {
@@ -180,7 +181,7 @@ impl Player {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Track {
     pub file_path: String,
 }

@@ -1,10 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 pub mod player;
+pub mod preferences;
 use std::sync::Mutex;
 
 use cxx;
 use once_cell::sync::OnceCell;
 use player::{Player, PlayerEvent, Track};
+use preferences::read_preferences;
 
 #[cxx::bridge]
 mod ffi {
@@ -53,6 +55,8 @@ pub fn run_threaded<F>(cb: F) where F: FnOnce() + Send + 'static {
 }
 
 fn main() {
+    // Read data from configuration
+    let preferences = read_preferences().expect("Failed to read preferences");
     // Initialize the player
     let player = Player::new();
     let recv = player.out_evt.clone();
