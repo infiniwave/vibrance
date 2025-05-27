@@ -1,4 +1,6 @@
 #include <QFileDialog>
+#include <QPainter>
+#include <QRadialGradient>
 #include "mainwindow.h"
 #include "../../target/cxxbridge/vibrance/src/main.rs.h"
 
@@ -102,6 +104,17 @@ void MainWindow::setupUi()
     statusbar = new QStatusBar(this);
     statusbar->setObjectName("statusbar");
     setStatusBar(statusbar);
+}
+
+void MainWindow::paintEvent(QPaintEvent *event)
+{
+    QPainter painter(this);
+    QRect rect = this->rect();
+    QRadialGradient gradient(rect.center(), rect.width() * 0.7);
+    gradient.setColorAt(0, QColor(31, 0, 28)); // Center color
+    gradient.setColorAt(1, QColor(15, 0, 60)); // Edge color
+    painter.fillRect(rect, gradient);
+    QMainWindow::paintEvent(event);
 }
 
 MediaPlayer* MainWindow::getMediaPlayer() {

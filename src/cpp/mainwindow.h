@@ -27,6 +27,9 @@ public:
 
     MediaPlayer* getMediaPlayer();
 
+protected:
+    void paintEvent(QPaintEvent *event) override;
+
 private:
     // UI elements
     QWidget *centralwidget;
