@@ -1,5 +1,6 @@
 use std::{fs::File, io::BufReader, path::PathBuf, sync::{mpsc::channel, Arc, Mutex}, thread, time::Duration};
 
+use id3::{Tag, TagLike};
 use rodio::{Decoder, OutputStream, Sink, Source};
 
 #[derive(Debug, Clone)]
@@ -51,7 +52,17 @@ impl Player {
                                 println!("File does not exist: {}", path.display());
                                 continue;
                             }
-                            in_evt.send(PlayerEvent::TrackLoaded(path.file_name().unwrap().to_str().unwrap().to_string())).unwrap_or_else(|_| {
+                            let tag = Tag::read_from_path(&path).ok();
+                            let x = tag.map(|t| {
+                                if let Some(title) = t.title() {
+                                    title.to_string()
+                                } else {
+                                    path.file_name().unwrap().to_str().unwrap().to_string()
+                                }
+                            }).unwrap_or_else(|| {
+                                path.file_name().unwrap().to_str().unwrap().to_string()
+                            });
+                            in_evt.send(PlayerEvent::TrackLoaded(x)).unwrap_or_else(|_| {
                                 println!("Failed to send track loaded event");
                             });
                             let file = File::open(&path).unwrap();
