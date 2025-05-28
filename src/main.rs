@@ -8,6 +8,7 @@ pub mod providers;
 use std::{fs, sync::Mutex, time::Duration};
 
 use cxx;
+use lrc::Lyrics;
 use lyrics::LyricSource;
 use once_cell::sync::OnceCell;
 use player::{Player, PlayerEvent};
@@ -99,7 +100,7 @@ pub fn get_lyrics_for_current_track() -> Vec<ffi::LyricLine> {
                     eprintln!("Failed to fetch lyrics: {}", e);
                     vec![]
                 }
-        }
+            }
         })
     } else {
         eprintln!("No current track to fetch lyrics for.");
@@ -131,9 +132,8 @@ pub fn play(id: &str) {
 pub fn get_track_list() -> Vec<ffi::TrackInfo> {
     let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
     let tracks = preferences.unorganized_tracks.values().collect::<Vec<_>>();
-    
-    
-    tracks.iter().map(|track| {
+    let library = preferences.user_library.values().flat_map(|tracks| tracks.values()).collect::<Vec<_>>();
+    tracks.into_iter().chain(library.into_iter()).map(|track| {
         let artists = if track.artists.is_empty() {
             "Unknown Artist".to_string()
         } else {
