@@ -15,6 +15,8 @@
 #include <QToolButton>
 #include "volumeflyout.h" 
 #include <QMainWindow>
+#include <QSvgRenderer>
+#include <QPainter>
 
 class MediaPlayer : public QWidget
 {
@@ -33,8 +35,9 @@ private:
     QVBoxLayout *trackDetails;
     QVBoxLayout *verticalLayout_2;
     QHBoxLayout *horizontalLayout_2;
-    QPushButton *pushButton_2;
-    QPushButton *pushButton;
+    QPushButton *pauseButton;
+    QPushButton *previousButton;
+    QPushButton *nextButton;
     QSlider *trackProgress;
     QHBoxLayout *trackProgressContainer;
     QLabel *elapsedDuration;

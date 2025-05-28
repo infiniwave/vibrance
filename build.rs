@@ -47,12 +47,14 @@ fn main() {
         .include("C:/Qt/6.9.0/msvc2022_64/include/QtWidgets")
         .include("C:/Qt/6.9.0/msvc2022_64/include/QtGui")
         .include("C:/Qt/6.9.0/msvc2022_64/include/QtCore")
+        .include("C:/Qt/6.9.0/msvc2022_64/include/QtSvg")
         .std("c++17")
         .compile("window_ffi");
     println!("cargo:rustc-link-search=native=C:/Qt/6.9.0/msvc2022_64/lib");
     println!("cargo:rustc-link-lib=dylib=Qt6Widgets");
     println!("cargo:rustc-link-lib=dylib=Qt6Gui");
     println!("cargo:rustc-link-lib=dylib=Qt6Core");
+    println!("cargo:rustc-link-lib=dylib=Qt6Svg");
     println!("cargo:rerun-if-changed=src/main.rs");
     println!("cargo:rerun-if-changed=src/**/*.h");
     println!("cargo:rerun-if-changed=src/**/*.cpp");
