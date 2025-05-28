@@ -226,6 +226,16 @@ fn main() {
                         drop(player);
                     },
                     PlayerEvent::TrackLoaded(track) => {
+                        let mut controls = CONTROLS.get().expect("Media controls not initialized").lock().expect("Failed to lock media controls mutex");
+                        let title = track.title.clone();
+                        let album = track.album.clone();
+                        controls.set_metadata(MediaMetadata {
+                            title: Some(&title.unwrap_or("Unknown Title".to_string())),
+                            album: Some(&album.unwrap_or("Unknown Album".to_string())),
+                            duration: Some(Duration::from_secs_f64(track.duration)),
+                            artist: Some(&track.artists.join(", ")),
+                            cover_url: None
+                        });
                         let media_player = unsafe { ffi::get_mainwindow_mediaplayer() };
                         unsafe {
                             ffi::mediaplayer_set_track(
