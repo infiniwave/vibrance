@@ -1,17 +1,20 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 pub mod controls;
+pub mod lyrics;
 pub mod player;
 pub mod preferences;
+pub mod providers;
 
 use std::{fs, sync::Mutex, time::Duration};
 
 use cxx;
-use lrc::Lyrics;
+use lyrics::LyricSource;
 use once_cell::sync::OnceCell;
 use player::{Player, PlayerEvent};
 use preferences::{read_preferences, PREFERENCES};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelBridge, ParallelIterator};
 use souvlaki::{MediaControls, MediaMetadata, MediaPlayback};
+use tokio::runtime::Runtime;
 
 unsafe extern "C" {
     unsafe fn get_mainwindow_hwnd() -> *mut std::ffi::c_void;
@@ -43,7 +46,7 @@ mod ffi {
     }
 
     #[derive(Debug)]
-    struct TrackInfo {
+    pub struct TrackInfo {
         id: String,
         title: String,
         artists: String,
@@ -52,8 +55,8 @@ mod ffi {
         duration: f64,
     }
 
-    #[derive(Debug)]
-    struct LyricLine {
+    #[derive(Debug, Clone)]
+    pub struct LyricLine {
         timestamp: f64, // seconds
         text: String,
     }
@@ -61,7 +64,6 @@ mod ffi {
 
 static PLAYER: OnceCell<Mutex<Player>> = OnceCell::new();
 static CONTROLS: OnceCell<Mutex<MediaControls>> = OnceCell::new();
-// TODO: periodically save preferences to disk
 
 pub fn get_lyrics_for_current_track() -> Vec<ffi::LyricLine> {
     // let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
@@ -74,14 +76,35 @@ pub fn get_lyrics_for_current_track() -> Vec<ffi::LyricLine> {
     //         }).collect();
     //     }
     // }
-    let sample_lyrics = "[ti:可惜夜]\n[ar:tayori]\n[al:可惜夜]\n[by:]\n[offset:0]\n[kana:2あたら1よ1し1きょく1とお1かん1むね1おく1ざわ1よる1ねつ1う1おも1は1はな1は1ひと1こころ1うば1だれ1さわ1くう1そう1か1なた1きみ1さら1そう1ぞう1かな1かみ1さま1ぼく1き1たい1ねむ1よる1ふけ1わす1き1のろ1も1むね1おく1こ1め1こえ1おぼ1つな1て1さぐ1あ1ふた1り1よる1つき1て1うそ1み1ぬ1かな1かみ1さま1ぼく1き1たい1つづ1ねが1な1あふ1おも1し1だい1あつ1うた1かた1と1よる1ゆ1およ2とわ1おど1だれ1さわ1くう1そう1か1なた1きみ1さら1そう1ぞう1かな1かみ1さま1ぼく1き1たい1ひ1きみ1とも1ねむ1よる1ふけ]\n[00:00.20]可惜夜 - tayori\n[00:01.20]词：tazuneru\n[00:01.87]曲：tazuneru\n[00:18.88]ずっと遠くに感じていた\n[00:22.45]胸の奥の騒めき\n[00:26.12]夜の熱に浮かされて\n[00:29.78]想いは馳せる\n[00:32.99]花も恥じらうような人\n[00:40.79]その心を奪えたなら\n[00:50.95]誰にも障れない空想の彼方\n[00:58.44]君を攫ってなんて想像している\n[01:05.67]叶うなら神様って\n[01:10.42]僕はただ期待して\n[01:13.38]眠れないまま夜に耽る\n[01:25.14]忘れようとしたって\n[01:28.01]ずっと消えなくて\n[01:32.62]呪いのように 燃ゆるように\n[01:36.28]胸の奥を焦がしていく\n[01:42.70]その瞳を その声を 憶えている\n[01:53.84]繋ぐ手を探り合った\n[01:58.45]二人だけの夜を\n[02:01.25]月が照らした嘘を\n[02:03.97]見抜けないまま\n[02:08.58]叶うなら神様って\n[02:13.21]僕はまた期待して\n[02:16.23]あの続きを願ってる\n[02:38.94]どうしようも無いくらい\n[02:42.78]溢れるこの想いが\n[02:46.44]次第に熱くなって\n[02:50.21]泡沫に溶けてゆく\n[02:56.58]この夜を揺られ游いで\n[03:03.94]永遠に踊ろう\n[03:07.66]誰にも障れない空想の彼方\n[03:15.00]君を攫ってなんて想像している\n[03:22.39]叶うなら神様って\n[03:26.97]僕はただ期待して\n[03:29.92]あの日のように君を灯す\n[03:37.24]眠れないまま夜に耽る";
-    let parsed = Lyrics::from_str(sample_lyrics).expect("Failed to parse lyrics");
-    parsed.get_timed_lines().iter().map(|line| {
-        ffi::LyricLine {
-            timestamp: line.0.get_timestamp() as f64,
-            text: line.1.to_string(),
+    let player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
+    if let Some(track) = &player.current_track {
+        if track.artists.is_empty() || track.title.is_none() {
+            eprintln!("Track artists or title is missing, cannot fetch lyrics.");
+            return vec![];
         }
-    }).collect::<Vec<_>>()
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async move {
+            let lyrics = providers::qq::QQProvider::fetch_lyrics(&track.artists.join(", "), &track.title.as_ref().unwrap()).await;
+            match lyrics {
+                Ok(lyrics) => {
+                    if lyrics.is_empty() {
+                        eprintln!("No lyrics found for the current track.");
+                        return vec![];
+                    }
+                    let lyrics = lyrics.get(0).unwrap().0.clone();
+                    println!("{:?}", lyrics);
+                    lyrics
+                },
+                Err(e) => {
+                    eprintln!("Failed to fetch lyrics: {}", e);
+                    vec![]
+                }
+        }
+        })
+    } else {
+        eprintln!("No current track to fetch lyrics for.");
+        return vec![];
+    }
 }
 
 pub fn play(id: &str) {
@@ -236,6 +259,7 @@ fn main() {
     let preferences = read_preferences().expect("Failed to read preferences");
     PREFERENCES.set(Mutex::new(preferences.clone())).expect("Failed to set preferences");
     println!("Preferences loaded successfully.");
+    lyrics::initialize().expect("Failed to initialize lyrics client");
     run_threaded(move || {
         let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
         let mut previous_preferences = preferences.clone();
@@ -279,6 +303,7 @@ fn main() {
                     PlayerEvent::End => {
                         println!("Playback ended");
                         let mut player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
+                        player.current_track = None;
                         player.play();
                         drop(player);
                     },
