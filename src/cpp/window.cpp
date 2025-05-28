@@ -30,6 +30,13 @@ std::uintptr_t get_mainwindow_mediaplayer() {
     return 0;
 }
 
+std::uintptr_t get_mainwindow() {
+    if (g_mainwindow) {
+        return reinterpret_cast<std::uintptr_t>(g_mainwindow);
+    }
+    return 0;
+}
+
 void mediaplayer_set_progress(std::uintptr_t mediaplayer, double value) {
     if (mediaplayer) {
         reinterpret_cast<MediaPlayer*>(mediaplayer)->setProgress(value);
@@ -56,4 +63,10 @@ void* get_mainwindow_hwnd() {
     }
 #endif
     return nullptr;
+}
+
+void add_track(std::uintptr_t mainwindow, rust::String id, rust::String title, rust::String artists) {
+    if (mainwindow && g_mainwindow) {
+        g_mainwindow->addTrack(id, title, artists);
+    }
 }

@@ -18,6 +18,7 @@
 #include <QVector>
 #include <vector>
 #include "mediaplayer.h"
+#include "../../target/cxxbridge/vibrance/src/main.rs.h"
 
 class MainWindow : public QMainWindow
 {
@@ -28,6 +29,7 @@ public:
     ~MainWindow();
 
     MediaPlayer* getMediaPlayer();
+    void addTrack(rust::String id, rust::String title, rust::String artists);
 
 protected:
     void paintEvent(QPaintEvent *event) override;

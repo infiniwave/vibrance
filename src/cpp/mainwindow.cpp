@@ -139,17 +139,21 @@ void MainWindow::paintEvent(QPaintEvent *event)
     QMainWindow::paintEvent(event);
 }
 
+void MainWindow::addTrack(rust::String id, rust::String title, rust::String artists) {
+    QListWidgetItem* item = new QListWidgetItem(trackList);
+    TrackItem* trackWidget = new TrackItem(std::string(id), QString::fromStdString(std::string(title)), QString::fromStdString(std::string(artists)), "");
+    item->setSizeHint(trackWidget->sizeHint());
+    trackList->addItem(item);
+    trackList->setItemWidget(item, trackWidget);
+}
+
 void MainWindow::showEvent(QShowEvent *event)
 {
     static bool initialized = false;
     if (!initialized) {
         auto tracks = get_track_list();
         for (const auto& track : tracks) {
-            QListWidgetItem* item = new QListWidgetItem(trackList);
-            TrackItem* trackWidget = new TrackItem(std::string(track.id), QString::fromStdString(std::string(track.title)), QString::fromStdString(std::string(track.artists)), QString::fromStdString(std::string(track.album_art_path)));
-            item->setSizeHint(trackWidget->sizeHint());
-            trackList->addItem(item);
-            trackList->setItemWidget(item, trackWidget);
+            addTrack(track.id, track.title, track.artists);
         }
         initialize_controls();
         initialized = true;
@@ -166,7 +170,6 @@ void MainWindow::loadLyrics() {
         QMetaObject::invokeMethod(this, [this]() { loadLyrics(); }, Qt::QueuedConnection);
         return;
     }
-    // Remove old labels
     qDeleteAll(lyricLabels);
     lyricLabels.clear();
     QLayoutItem *child;
@@ -177,7 +180,7 @@ void MainWindow::loadLyrics() {
     auto lyrics = get_lyrics_for_current_track();
     for (const auto &line : lyrics) {
         QLabel *label = new QLabel(QString::fromStdString(std::string(line.text)));
-        label->setStyleSheet("color: gray;"); // default style
+        label->setStyleSheet("color: gray;");
         lyricLayout->addWidget(label);
         lyricLabels.append(label);
         lyricTimestamps.push_back(line.timestamp);
@@ -205,6 +208,6 @@ void MainWindow::updateLyricHighlight(double currentTime) {
     }
     if (!lyricLabels.isEmpty()) {
         QWidget *highlighted = lyricLabels[highlightIndex];
-        lyricScrollArea->ensureWidgetVisible(highlighted, 0, 40); // 40px margin
+        lyricScrollArea->ensureWidgetVisible(highlighted, 0, 40);
     }
 }
