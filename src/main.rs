@@ -179,6 +179,25 @@ fn main() {
     let preferences = read_preferences().expect("Failed to read preferences");
     PREFERENCES.set(Mutex::new(preferences.clone())).expect("Failed to set preferences");
     println!("Preferences loaded successfully.");
+    run_threaded(move || {
+        let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
+        let mut previous_preferences = preferences.clone();
+        drop(preferences); 
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(60)); 
+            let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
+            if *preferences == previous_preferences {
+                break;
+            }
+            println!("Preferences changed, saving...");
+            if let Err(e) = preferences.save() {
+                eprintln!("Failed to save preferences: {}", e);
+            } else {
+                println!("Preferences saved successfully.");
+                previous_preferences.clone_from(&*preferences);
+            }
+        }
+    });
     // Initialize the player
     let player = Player::new(preferences.volume.clone());
     let recv = player.out_evt.clone();
@@ -246,6 +265,15 @@ fn main() {
     let player = Mutex::new(player);
     PLAYER.set(player).expect("Failed to initialize player");
     println!("Player initialized successfully.");
+    std::panic::set_hook(Box::new(|info| {
+        eprintln!("Panic occurred: {:?}", info);
+        let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
+        if let Err(e) = preferences.save() {
+            eprintln!("Failed to save preferences on panic: {}", e);
+        } else {
+            println!("Preferences saved successfully on panic.");
+        }
+    }));
     // Start the Qt application
     let args: Vec<std::ffi::CString> = std::env::args()
         .map(|arg| std::ffi::CString::new(arg).unwrap())
@@ -255,4 +283,12 @@ fn main() {
     unsafe {
         ffi::show_widget_window(args.len() as i32, raw_args.as_mut_ptr());
     }
+
+    let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
+    if let Err(e) = preferences.save() {
+        eprintln!("Failed to save preferences on exit: {}", e);
+    } else {
+        println!("Preferences saved successfully on exit.");
+    }
+    println!("Bye");
 }
