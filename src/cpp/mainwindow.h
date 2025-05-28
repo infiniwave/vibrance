@@ -14,6 +14,9 @@
 #include <QtWidgets/QStatusBar>
 #include <QtWidgets/QVBoxLayout>
 #include <QtWidgets/QWidget>
+#include <QScrollArea>
+#include <QVector>
+#include <vector>
 #include "mediaplayer.h"
 
 class MainWindow : public QMainWindow
@@ -46,7 +49,18 @@ private:
     QMenuBar *menubar;
     QStatusBar *statusbar;
 
+    QScrollArea *lyricScrollArea;
+    QWidget *lyricContainer;
+    QVBoxLayout *lyricLayout;
+    QVector<QLabel*> lyricLabels;
+    QTimer *lyricScrollTimer;
+    QTabWidget *tabWidget;
+    std::vector<double> lyricTimestamps;
     void setupUi();
+
+public slots:
+    void loadLyrics();
+    void updateLyricHighlight(double currentTime);
 };
 
 #endif // MEDIAPLAYER_H

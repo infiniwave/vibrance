@@ -1,6 +1,7 @@
 #include "mediaplayer.h"
 #include "volumeflyout.h"
 #include "../../target/cxxbridge/vibrance/src/main.rs.h"
+#include "mainwindow.h"
 
 MediaPlayer::MediaPlayer(QWidget *parent)
     : QWidget(parent)
@@ -147,13 +148,27 @@ void MediaPlayer::setProgress(double value) {
     if (trackProgress && !isSliderBeingDragged) {
         trackProgress->setValue(int(value* 100000));
     }
+    QMainWindow* mainWin = qobject_cast<QMainWindow*>(this->window());
+    if (mainWin) {
+        auto mw = qobject_cast<MainWindow*>(mainWin);
+        if (mw) {
+            mw->updateLyricHighlight(value* trackLength* 1000);
+        }
+    }
 }
 
 void MediaPlayer::setTrack(std::string title, std::string artists, std::string album, double duration) {
     trackTitle->setText(QString::fromStdString(title));
     trackArtists->setText(QString::fromStdString(artists));
     totalDuration->setText(QString::fromStdString(formatDuration(duration)));
-    trackLength = duration;
+    trackLength = duration;    
+    QMainWindow* mainWin = qobject_cast<QMainWindow*>(this->window());
+    if (mainWin) {
+        auto mw = qobject_cast<MainWindow*>(mainWin);
+        if (mw) {
+            mw->loadLyrics();
+        }
+    }
 }
 
 

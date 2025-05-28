@@ -14,6 +14,7 @@
 #include <string>
 #include <QToolButton>
 #include "volumeflyout.h" 
+#include <QMainWindow>
 
 class MediaPlayer : public QWidget
 {

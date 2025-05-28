@@ -1,6 +1,7 @@
 #include <QFileDialog>
 #include <QPainter>
 #include <QRadialGradient>
+#include <QThread>
 #include "mainwindow.h"
 #include "trackitem.h"
 #include "../../target/cxxbridge/vibrance/src/main.rs.h"
@@ -83,14 +84,24 @@ void MainWindow::setupUi()
 
 
     horizontalLayout->addLayout(verticalLayout_2);
-
+    tabWidget = new QTabWidget();
+    tabWidget->setObjectName("tabWidget");
+    tabWidget->setStyleSheet("QTabWidget::pane { border: 0px; } QTabBar::tab { background: rgba(30, 30, 30, 0.5); color: white; padding: 8px; border-radius: 8px; } QTabBar::tab:selected { background: rgba(50, 50, 50, 0.5); }");
     verticalLayout_3 = new QVBoxLayout();
     verticalLayout_3->setObjectName("verticalLayout_3");
     trackList = new QListWidget();
     trackList->setObjectName("trackList");
     trackList->setStyleSheet("background: rgba(30, 30, 30, 0.5); color: white; border-radius: 8px;");
-    
-    verticalLayout_3->addWidget(trackList);
+    tabWidget->addTab(trackList, "Tracks");
+    lyricScrollArea = new QScrollArea(this);
+    lyricContainer = new QWidget;
+    lyricLayout = new QVBoxLayout(lyricContainer);
+    lyricContainer->setLayout(lyricLayout);
+    lyricScrollArea->setWidget(lyricContainer);
+    lyricScrollArea->setWidgetResizable(true);
+    lyricScrollArea->setStyleSheet("background: rgba(30, 30, 30, 0.3); color: white; border-radius: 8px;");
+    tabWidget->addTab(lyricScrollArea, "Lyrics");
+    verticalLayout_3->addWidget(tabWidget);
 
 
     horizontalLayout->addLayout(verticalLayout_3);
@@ -148,4 +159,52 @@ void MainWindow::showEvent(QShowEvent *event)
 
 MediaPlayer* MainWindow::getMediaPlayer() {
     return widget;
+}
+
+void MainWindow::loadLyrics() {
+    if (QThread::currentThread() != this->thread()) {
+        QMetaObject::invokeMethod(this, [this]() { loadLyrics(); }, Qt::QueuedConnection);
+        return;
+    }
+    // Remove old labels
+    qDeleteAll(lyricLabels);
+    lyricLabels.clear();
+    QLayoutItem *child;
+    while ((child = lyricLayout->takeAt(0)) != nullptr) {
+        delete child;
+    }
+    lyricTimestamps.clear();
+    auto lyrics = get_lyrics_for_current_track();
+    for (const auto &line : lyrics) {
+        QLabel *label = new QLabel(QString::fromStdString(std::string(line.text)));
+        label->setStyleSheet("color: gray;"); // default style
+        lyricLayout->addWidget(label);
+        lyricLabels.append(label);
+        lyricTimestamps.push_back(line.timestamp);
+    }
+}
+
+void MainWindow::updateLyricHighlight(double currentTime) {
+    if (QThread::currentThread() != this->thread()) {
+        QMetaObject::invokeMethod(this, [this, currentTime]() { updateLyricHighlight(currentTime); }, Qt::QueuedConnection);
+        return;
+    }
+    int highlightIndex = 0;
+    for (int i = 0; i < lyricTimestamps.size(); ++i) {
+        if (lyricTimestamps[i] > currentTime) {
+            highlightIndex = (i == 0) ? 0 : i - 1;
+            break;
+        }
+        highlightIndex = i;
+    }
+    for (int i = 0; i < lyricLabels.size(); ++i) {
+        if (i == highlightIndex)
+            lyricLabels[i]->setStyleSheet("color: white; font-weight: bold; background-color: transparent; font-size: 16px;");
+        else
+            lyricLabels[i]->setStyleSheet("color: gray; background-color: transparent; font-size: 14px;");
+    }
+    if (!lyricLabels.isEmpty()) {
+        QWidget *highlighted = lyricLabels[highlightIndex];
+        lyricScrollArea->ensureWidgetVisible(highlighted, 0, 40); // 40px margin
+    }
 }
