@@ -8,7 +8,7 @@ use crate::player::Track;
 
 pub static PREFERENCES: OnceCell<Mutex<Preferences>> = OnceCell::new();
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct Preferences {
     pub user_library: HashMap<String, HashMap<String, Track>>, // folder path -> (file name -> Track)
     pub unorganized_tracks: HashMap<String, Track>, // file name -> Track
@@ -37,6 +37,12 @@ impl Preferences {
     }
     pub fn add_track_to_library(&mut self, folder: String, track: Track) {
         self.user_library.entry(folder).or_default().insert(track.id.clone(), track);
+    }
+    pub fn add_tracks_to_library(&mut self, folder: String, tracks: Vec<Track>) {
+        let folder_tracks = self.user_library.entry(folder).or_default();
+        for track in tracks {
+            folder_tracks.insert(track.id.clone(), track);
+        }
     }
     pub fn add_unorganized_track(&mut self, track: Track) {
         // check if the track already exists by file name

@@ -1,6 +1,7 @@
 use std::{fs::File, io::BufReader, path::PathBuf, sync::{mpsc::channel, Arc, Mutex}, thread, time::Duration};
 
 use anyhow::Result;
+use chrono::Utc;
 use lofty::{file::{AudioFile, TaggedFileExt}, probe::Probe, tag::ItemKey};
 use rodio::{Decoder, OutputStream, Sink, Source};
 use serde::{Deserialize, Serialize};
@@ -47,6 +48,7 @@ impl Player {
             let mut current_duration = 0.0;
             let mut global_volume = volume; 
             sink.set_volume(global_volume);
+            let mut last_progress_updated: i64 = 0;
             loop {
                 if let Ok(cmd) = out_cmd.try_recv() {
                     match cmd {
@@ -91,6 +93,8 @@ impl Player {
                                 });
                             } else {
                                 sink.pause();
+                                let position = sink.get_pos().as_secs_f32() / current_duration;
+                                in_evt.send(PlayerEvent::Progress(position.into())).unwrap();
                                 in_evt.send(PlayerEvent::Paused).unwrap_or_else(|_| {
                                     println!("Failed to send pause event");
                                 });
@@ -119,12 +123,17 @@ impl Player {
                     in_evt.send(PlayerEvent::End).unwrap_or_else(|_| {
                         println!("Failed to send end event");
                     });
-                } else if !sink.empty() {
+                } else if !sink.empty() && !sink.is_paused() {
+                    if Utc::now().timestamp_millis() - last_progress_updated < 100 {
+                        thread::sleep(std::time::Duration::from_millis(100));
+                        continue; // Skip if the last update was too recent
+                    }
                     // Emit progress event based on current position
                     let position = sink.get_pos().as_secs_f32() / current_duration;
                     in_evt.send(PlayerEvent::Progress(position.into())).unwrap();
+                    last_progress_updated = Utc::now().timestamp_millis();
                 }
-                thread::sleep(std::time::Duration::from_millis(10)); // Polling interval
+                thread::sleep(std::time::Duration::from_millis(100));
             }
         });
         Player {
@@ -235,7 +244,7 @@ impl Player {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct Track {
     pub id: String,
     pub title: Option<String>,
@@ -245,7 +254,7 @@ pub struct Track {
     pub sources: Vec<TrackSource>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub enum TrackSource {
     File(String)
 }
