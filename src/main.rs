@@ -12,10 +12,10 @@ use cxx;
 use lyrics::LyricSource;
 use once_cell::sync::OnceCell;
 use player::{Player, PlayerEvent};
-use preferences::{read_preferences, PREFERENCES};
+use preferences::{PREFERENCES, read_preferences};
 use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use souvlaki::{MediaControls, MediaMetadata, MediaPlayback};
-use tokio::runtime::Runtime;
+use tokio::{runtime::Runtime, time::timeout};
 
 unsafe extern "C" {
     unsafe fn get_mainwindow_hwnd() -> *mut std::ffi::c_void;
@@ -29,9 +29,21 @@ mod ffi {
         unsafe fn get_mainwindow_mediaplayer() -> usize;
         unsafe fn get_mainwindow() -> usize;
         unsafe fn mediaplayer_set_progress(mediaplayer: usize, value: f64);
-        unsafe fn mediaplayer_set_track(mediaplayer: usize, title: String, artists: String, album: String, duration: f64);
+        unsafe fn mediaplayer_set_track(
+            mediaplayer: usize,
+            title: String,
+            artists: String,
+            album: String,
+            duration: f64,
+        );
         unsafe fn mediaplayer_set_paused(mediaplayer: usize, paused: bool);
-        unsafe fn add_track(mainwindow: usize, id: String, title: String, artists: String, album_art: String);
+        unsafe fn add_track(
+            mainwindow: usize,
+            id: String,
+            title: String,
+            artists: String,
+            album_art: String,
+        );
     }
     extern "Rust" {
         fn process_audio_file(path: &str);
@@ -77,7 +89,11 @@ pub fn get_lyrics_for_current_track() -> Vec<ffi::LyricLine> {
     //         }).collect();
     //     }
     // }
-    let player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
+    let player = PLAYER
+        .get()
+        .expect("Player not initialized")
+        .lock()
+        .expect("Failed to lock player mutex");
     if let Some(track) = &player.current_track {
         if track.artists.is_empty() || track.title.is_none() {
             eprintln!("Track artists or title is missing, cannot fetch lyrics.");
@@ -85,23 +101,29 @@ pub fn get_lyrics_for_current_track() -> Vec<ffi::LyricLine> {
         }
         let rt = Runtime::new().unwrap();
         rt.block_on(async move {
-            let lyrics = providers::qq::QQProvider::fetch_lyrics(&track.artists.join(", "), &track.title.as_ref().unwrap()).await;
-            match lyrics {
-                Ok(lyrics) => {
-                    if lyrics.is_empty() {
-                        eprintln!("No lyrics found for the current track.");
-                        return vec![];
+            timeout(Duration::from_secs(4),async move {
+                let lyrics = providers::qq::QQProvider::fetch_lyrics(
+                    &track.artists.join(", "),
+                    &track.title.as_ref().unwrap(),
+                )
+                .await;
+                match lyrics {
+                    Ok(lyrics) => {
+                        if lyrics.is_empty() {
+                            eprintln!("No lyrics found for the current track.");
+                            return vec![];
+                        }
+                        let lyrics = lyrics.get(0).unwrap().0.clone();
+                        println!("{:?}", lyrics);
+                        lyrics
                     }
-                    let lyrics = lyrics.get(0).unwrap().0.clone();
-                    println!("{:?}", lyrics);
-                    lyrics
-                },
-                Err(e) => {
-                    eprintln!("Failed to fetch lyrics: {}", e);
-                    vec![]
+                    Err(e) => {
+                        eprintln!("Failed to fetch lyrics: {}", e);
+                        vec![]
+                    }
                 }
-            }
-        })
+            }).await
+        }).unwrap_or(vec![])
     } else {
         eprintln!("No current track to fetch lyrics for.");
         return vec![];
@@ -109,11 +131,19 @@ pub fn get_lyrics_for_current_track() -> Vec<ffi::LyricLine> {
 }
 
 pub fn play(id: &str) {
-    let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
+    let preferences = PREFERENCES
+        .get()
+        .expect("Preferences not initialized")
+        .lock()
+        .expect("Failed to lock preferences mutex");
     let track = preferences.find_track_by_id(id);
     drop(preferences);
     if let Some(track) = track {
-        let mut player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
+        let mut player = PLAYER
+            .get()
+            .expect("Player not initialized")
+            .lock()
+            .expect("Failed to lock player mutex");
         player.clear_queue();
         player.add_track(track);
         player.play();
@@ -147,7 +177,10 @@ fn add_track_to_mainwindow(track: &player::Track, mainwindow: usize) {
         ffi::add_track(
             mainwindow,
             track.id.clone(),
-            track.title.clone().unwrap_or_else(|| "Unknown Title".to_string()),
+            track
+                .title
+                .clone()
+                .unwrap_or_else(|| "Unknown Title".to_string()),
             track.artists.join(", "),
             track.album_art.clone().unwrap_or_default(),
         );
@@ -155,17 +188,32 @@ fn add_track_to_mainwindow(track: &player::Track, mainwindow: usize) {
 }
 
 pub fn get_track_list() -> Vec<ffi::TrackInfo> {
-    let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
-    preferences.all_tracks().into_iter().par_bridge().map(|track| track.into()).collect()
+    let preferences = PREFERENCES
+        .get()
+        .expect("Preferences not initialized")
+        .lock()
+        .expect("Failed to lock preferences mutex");
+    preferences
+        .all_tracks()
+        .into_iter()
+        .par_bridge()
+        .map(|track| track.into())
+        .collect()
 }
 
 pub fn initialize_controls() {
     // Initialize media controls if enabled in preferences
-    let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
+    let preferences = PREFERENCES
+        .get()
+        .expect("Preferences not initialized")
+        .lock()
+        .expect("Failed to lock preferences mutex");
     if preferences.use_system_audio_controls {
-        CONTROLS.get_or_try_init::<_, Box<dyn std::error::Error + Send + Sync>>(|| {
-            Ok(Mutex::new(controls::initialize()?))
-        }).expect("Failed to initialize media controls");
+        CONTROLS
+            .get_or_try_init::<_, Box<dyn std::error::Error + Send + Sync>>(|| {
+                Ok(Mutex::new(controls::initialize()?))
+            })
+            .expect("Failed to initialize media controls");
         println!("Media controls initialized successfully.");
     } else {
         println!("System audio controls are disabled in preferences.");
@@ -173,16 +221,28 @@ pub fn initialize_controls() {
 }
 
 pub fn get_initial_volume() -> i32 {
-    let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
+    let preferences = PREFERENCES
+        .get()
+        .expect("Preferences not initialized")
+        .lock()
+        .expect("Failed to lock preferences mutex");
     (preferences.volume * 100.0) as i32
 }
 
 pub fn process_audio_file(path: &str) {
     println!("Rust received file path: {}", path);
-    let mut player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
-    let track = player.resolve_track(path.to_string()).expect("Failed to resolve track");
+    let mut player = PLAYER
+        .get()
+        .expect("Player not initialized")
+        .lock()
+        .expect("Failed to lock player mutex");
+    let track = player
+        .resolve_track(path.to_string())
+        .expect("Failed to resolve track");
     let preferences = PREFERENCES.get().expect("Preferences not initialized");
-    let mut preferences = preferences.lock().expect("Failed to lock preferences mutex");
+    let mut preferences = preferences
+        .lock()
+        .expect("Failed to lock preferences mutex");
     preferences.add_unorganized_track(track.clone());
     drop(preferences);
     player.add_track(track.clone());
@@ -195,82 +255,113 @@ pub fn process_audio_file(path: &str) {
 pub fn open_media_directory(directory_path: &str) {
     println!("Rust received directory path: {}", directory_path);
     let files = fs::read_dir(directory_path).expect("Failed to read directory");
-    let player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
+    let player = PLAYER
+        .get()
+        .expect("Player not initialized")
+        .lock()
+        .expect("Failed to lock player mutex");
     let files = files
         .par_bridge()
         .into_par_iter()
-        .filter_map(|entry| {
-            match entry {
-                Ok(entry) => {
-                    let path = entry.path();
-                    if path.is_file() {
-                        if let Some(ext) = path.extension() {
-                            if ext == "mp3" || ext == "wav" || ext == "flac" || ext == "ogg" {
-                                Some(path.to_string_lossy().to_string())
-                            } else {
-                                None
-                            }
+        .filter_map(|entry| match entry {
+            Ok(entry) => {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(ext) = path.extension() {
+                        if ext == "mp3" || ext == "wav" || ext == "flac" || ext == "ogg" {
+                            Some(path.to_string_lossy().to_string())
                         } else {
                             None
                         }
                     } else {
                         None
                     }
-                },
-                Err(_) => None,
+                } else {
+                    None
+                }
             }
+            Err(_) => None,
         })
-        .filter_map(|path| {
-            player.resolve_track(path).ok()
-        })
+        .filter_map(|path| player.resolve_track(path).ok())
         .collect::<Vec<_>>();
     let mainwindow = unsafe { ffi::get_mainwindow() };
     for track in &files {
         add_track_to_mainwindow(track, mainwindow);
     }
     let preferences = PREFERENCES.get().expect("Preferences not initialized");
-    let mut preferences = preferences.lock().expect("Failed to lock preferences mutex");
-    println!("Processed {} audio files from directory: {}", files.len(), directory_path);
+    let mut preferences = preferences
+        .lock()
+        .expect("Failed to lock preferences mutex");
+    println!(
+        "Processed {} audio files from directory: {}",
+        files.len(),
+        directory_path
+    );
     preferences.add_tracks_to_library(directory_path.to_string(), files);
     drop(preferences);
     println!("Media directory opened and tracks added to library.");
 }
 
 pub fn pause() {
-    let mut player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
+    let mut player = PLAYER
+        .get()
+        .expect("Player not initialized")
+        .lock()
+        .expect("Failed to lock player mutex");
     player.pause();
 }
 
 pub fn seek(duration: f64) {
-    let mut player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
+    let mut player = PLAYER
+        .get()
+        .expect("Player not initialized")
+        .lock()
+        .expect("Failed to lock player mutex");
     player.seek(duration as f32);
 }
 
 pub fn set_volume(volume: i32) {
-    let mut player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
+    let mut player = PLAYER
+        .get()
+        .expect("Player not initialized")
+        .lock()
+        .expect("Failed to lock player mutex");
     player.set_volume((volume as f32) / 100.0);
 }
 
 lazy_static::lazy_static! {
     static ref THREAD_POOL: rayon::ThreadPool = rayon::ThreadPoolBuilder::new().build().unwrap();
 }
-pub fn run_threaded<F>(cb: F) where F: FnOnce() + Send + 'static {
+pub fn run_threaded<F>(cb: F)
+where
+    F: FnOnce() + Send + 'static,
+{
     THREAD_POOL.spawn(cb);
 }
 
 fn main() {
     // Read data from configuration
     let preferences = read_preferences().expect("Failed to read preferences");
-    PREFERENCES.set(Mutex::new(preferences.clone())).expect("Failed to set preferences");
+    PREFERENCES
+        .set(Mutex::new(preferences.clone()))
+        .expect("Failed to set preferences");
     println!("Preferences loaded successfully.");
     lyrics::initialize().expect("Failed to initialize lyrics client");
     run_threaded(move || {
-        let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
+        let preferences = PREFERENCES
+            .get()
+            .expect("Preferences not initialized")
+            .lock()
+            .expect("Failed to lock preferences mutex");
         let mut previous_preferences = preferences.clone();
-        drop(preferences); 
+        drop(preferences);
         loop {
-            std::thread::sleep(std::time::Duration::from_secs(60)); 
-            let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
+            std::thread::sleep(std::time::Duration::from_secs(60));
+            let preferences = PREFERENCES
+                .get()
+                .expect("Preferences not initialized")
+                .lock()
+                .expect("Failed to lock preferences mutex");
             if *preferences == previous_preferences {
                 break;
             }
@@ -298,16 +389,24 @@ fn main() {
                         ffi::mediaplayer_set_progress(media_player, progress_value);
                     }
                     // println!("Progress: {}", progress_value);
-                },
+                }
                 PlayerEvent::End => {
                     println!("Playback ended");
-                    let mut player = PLAYER.get().expect("Player not initialized").lock().expect("Failed to lock player mutex");
+                    let mut player = PLAYER
+                        .get()
+                        .expect("Player not initialized")
+                        .lock()
+                        .expect("Failed to lock player mutex");
                     player.current_track = None;
                     player.play();
                     drop(player);
-                },
+                }
                 PlayerEvent::TrackLoaded(track) => {
-                    let mut controls = CONTROLS.get().expect("Media controls not initialized").lock().expect("Failed to lock media controls mutex");
+                    let mut controls = CONTROLS
+                        .get()
+                        .expect("Media controls not initialized")
+                        .lock()
+                        .expect("Failed to lock media controls mutex");
                     let title = track.title.clone();
                     let album = track.album.clone();
                     let c = controls.set_metadata(MediaMetadata {
@@ -323,41 +422,49 @@ fn main() {
                     let media_player = unsafe { ffi::get_mainwindow_mediaplayer() };
                     unsafe {
                         ffi::mediaplayer_set_track(
-                            media_player, 
-                            track.title.unwrap_or("Unknown Title".to_string()), 
-                            track.artists.join(", "), 
-                            track.album_art.unwrap_or(String::new()), 
-                            track.duration
+                            media_player,
+                            track.title.unwrap_or("Unknown Title".to_string()),
+                            track.artists.join(", "),
+                            track.album_art.unwrap_or(String::new()),
+                            track.duration,
                         );
                     }
                     // println!("Track loaded: {}", track.file_path);
-                },
+                }
                 PlayerEvent::Paused => {
                     let media_player = unsafe { ffi::get_mainwindow_mediaplayer() };
                     unsafe {
                         ffi::mediaplayer_set_paused(media_player, true);
                     }
-                    let mut controls = CONTROLS.get().expect("Media controls not initialized").lock().expect("Failed to lock media controls mutex");
+                    let mut controls = CONTROLS
+                        .get()
+                        .expect("Media controls not initialized")
+                        .lock()
+                        .expect("Failed to lock media controls mutex");
                     let c = controls.set_playback(MediaPlayback::Paused { progress: None });
                     if let Err(e) = c {
                         eprintln!("Failed to set playback state: {:?}", e);
                     }
-                    drop(controls); 
+                    drop(controls);
                     // println!("Playback paused: {}", paused);
-                },
+                }
                 PlayerEvent::Resumed => {
                     let media_player = unsafe { ffi::get_mainwindow_mediaplayer() };
                     unsafe {
                         ffi::mediaplayer_set_paused(media_player, false);
                     }
-                    let mut controls = CONTROLS.get().expect("Media controls not initialized").lock().expect("Failed to lock media controls mutex");
+                    let mut controls = CONTROLS
+                        .get()
+                        .expect("Media controls not initialized")
+                        .lock()
+                        .expect("Failed to lock media controls mutex");
                     let c = controls.set_playback(MediaPlayback::Playing { progress: None });
                     if let Err(e) = c {
                         eprintln!("Failed to set playback state: {:?}", e);
                     }
                     drop(controls);
                     // println!("Playback resumed");
-                },
+                }
             }
         }
     });
@@ -366,7 +473,11 @@ fn main() {
     println!("Player initialized successfully.");
     std::panic::set_hook(Box::new(|info| {
         eprintln!("Panic occurred: {:?}", info);
-        let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
+        let preferences = PREFERENCES
+            .get()
+            .expect("Preferences not initialized")
+            .lock()
+            .expect("Failed to lock preferences mutex");
         if let Err(e) = preferences.save() {
             eprintln!("Failed to save preferences on panic: {}", e);
         } else {
@@ -383,7 +494,11 @@ fn main() {
         ffi::show_widget_window(args.len() as i32, raw_args.as_mut_ptr());
     }
 
-    let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
+    let preferences = PREFERENCES
+        .get()
+        .expect("Preferences not initialized")
+        .lock()
+        .expect("Failed to lock preferences mutex");
     if let Err(e) = preferences.save() {
         eprintln!("Failed to save preferences on exit: {}", e);
     } else {

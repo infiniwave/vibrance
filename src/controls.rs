@@ -1,4 +1,4 @@
-use std::{ffi::c_void};
+use std::ffi::c_void;
 
 use anyhow::Result;
 use souvlaki::{MediaControlEvent, MediaControls, PlatformConfig};
@@ -11,34 +11,35 @@ pub fn initialize() -> Result<MediaControls> {
         dbus_name: "vibrance",
         display_name: "Vibrance",
         hwnd,
-    }).map_err(|e| anyhow::anyhow!("Failed to create MediaControls: {:?}", e))?;
-    controls.attach(|e| {
-        match e {
-            MediaControlEvent::Pause => {
-                crate::pause();
+    })
+    .map_err(|e| anyhow::anyhow!("Failed to create MediaControls: {:?}", e))?;
+    controls
+        .attach(|e| {
+            match e {
+                MediaControlEvent::Pause => {
+                    crate::pause();
+                }
+                MediaControlEvent::Play => {
+                    crate::pause();
+                }
+                _ => {
+                    // Handle other events if needed
+                }
             }
-            MediaControlEvent::Play => {
-                crate::pause();
-            }
-            _ => {
-                // Handle other events if needed
-            }
-        }
-    }).map_err(|e| anyhow::anyhow!("Failed to attach MediaControls: {:?}", e))?;
+        })
+        .map_err(|e| anyhow::anyhow!("Failed to attach MediaControls: {:?}", e))?;
 
     Ok(controls)
 }
 
-
 pub fn try_get_hwnd() -> Result<Option<*mut c_void>> {
-
     #[cfg(not(target_os = "windows"))]
     return Ok(None);
 
     #[cfg(target_os = "windows")]
     return unsafe {
-        let hwnd = get_mainwindow_hwnd();       
-        println!("HWND: {:?}", hwnd); 
+        let hwnd = get_mainwindow_hwnd();
+        println!("HWND: {:?}", hwnd);
         if hwnd.is_null() {
             Err(anyhow::anyhow!("Failed to get main window handle"))
         } else {

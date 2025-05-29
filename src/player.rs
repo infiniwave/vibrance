@@ -1,9 +1,20 @@
-use std::{fs::File, io::BufReader, path::PathBuf, sync::{mpsc::channel, Arc, Mutex}, thread, time::Duration};
+use std::{
+    fs::File,
+    io::BufReader,
+    path::PathBuf,
+    sync::{Arc, Mutex, mpsc::channel},
+    thread,
+    time::Duration,
+};
 
 use anyhow::Result;
-use base64::{prelude::BASE64_STANDARD, Engine};
+use base64::{Engine, prelude::BASE64_STANDARD};
 use chrono::Utc;
-use lofty::{file::{AudioFile, TaggedFileExt}, probe::Probe, tag::ItemKey};
+use lofty::{
+    file::{AudioFile, TaggedFileExt},
+    probe::Probe,
+    tag::ItemKey,
+};
 use rodio::{Decoder, OutputStream, Sink, Source};
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
@@ -47,16 +58,18 @@ impl Player {
             let (_stream, stream_handle) = OutputStream::try_default().unwrap();
             let sink = Sink::try_new(&stream_handle).unwrap();
             let mut current_duration = 0.0;
-            let mut global_volume = volume; 
+            let mut global_volume = volume;
             sink.set_volume(global_volume);
             let mut last_progress_updated: i64 = 0;
             loop {
                 if let Ok(cmd) = out_cmd.try_recv() {
                     match cmd {
-                        PlayerCommand::Play(track) => {            
-                            in_evt.send(PlayerEvent::TrackLoaded(track.clone())).unwrap_or_else(|_| {
-                                println!("Failed to send track loaded event");
-                            });
+                        PlayerCommand::Play(track) => {
+                            in_evt
+                                .send(PlayerEvent::TrackLoaded(track.clone()))
+                                .unwrap_or_else(|_| {
+                                    println!("Failed to send track loaded event");
+                                });
                             let path = match track.sources.first() {
                                 Some(TrackSource::File(path)) => {
                                     if !PathBuf::from(path).exists() {
@@ -64,7 +77,7 @@ impl Player {
                                         continue;
                                     }
                                     path.clone()
-                                },
+                                }
                                 _ => {
                                     println!("No valid track source found");
                                     continue;
@@ -72,23 +85,27 @@ impl Player {
                             };
                             let file = File::open(&path).unwrap();
                             let source = Decoder::new(BufReader::new(file)).unwrap();
-                            current_duration = source.total_duration().map(|d| d.as_secs_f32()).unwrap_or(0.0);
+                            current_duration = source
+                                .total_duration()
+                                .map(|d| d.as_secs_f32())
+                                .unwrap_or(0.0);
                             println!("Playing track: {}", current_duration);
                             sink.append(source);
                             sink.play();
                             in_evt.send(PlayerEvent::Resumed).unwrap_or_else(|_| {
                                 println!("Failed to send unpause event");
                             });
-                        },
+                        }
                         PlayerCommand::Seek(pos) => {
-                            sink.try_seek(Duration::from_secs_f32(pos * current_duration)).unwrap_or_else(|_| {
-                                println!("Failed to seek to position: {}", pos);
-                            });
-                        },
+                            sink.try_seek(Duration::from_secs_f32(pos * current_duration))
+                                .unwrap_or_else(|_| {
+                                    println!("Failed to seek to position: {}", pos);
+                                });
+                        }
                         PlayerCommand::Stop => {
                             sink.clear();
                             current_duration = 0.0;
-                        },
+                        }
                         PlayerCommand::Pause => {
                             if sink.is_paused() {
                                 sink.play();
@@ -103,23 +120,25 @@ impl Player {
                                     println!("Failed to send pause event");
                                 });
                             }
-                        },
+                        }
                         PlayerCommand::SetVolume(volume) => {
                             sink.set_volume(volume);
                             global_volume = volume;
-                            let mut preferences = PREFERENCES.get().expect("Preferences not initialized")
+                            let mut preferences = PREFERENCES
+                                .get()
+                                .expect("Preferences not initialized")
                                 .lock()
                                 .expect("Failed to lock preferences mutex");
                             preferences.volume = volume;
                             drop(preferences);
-                        },
+                        }
                         PlayerCommand::SetMuted(muted) => {
                             if muted {
                                 sink.set_volume(0.0);
                             } else {
                                 sink.set_volume(global_volume); // Default volume, adjust as needed
                             }
-                        },
+                        }
                     }
                 }
                 if sink.empty() && current_duration > 0.0 {
@@ -193,13 +212,17 @@ impl Player {
 
     pub fn set_volume(&mut self, volume: f32) {
         let cmd = PlayerCommand::SetVolume(volume);
-        self.in_cmd.send(cmd).expect("Failed to send set volume command");
+        self.in_cmd
+            .send(cmd)
+            .expect("Failed to send set volume command");
         println!("Volume set to: {}", volume);
     }
 
     pub fn set_muted(&mut self, muted: bool) {
         let cmd = PlayerCommand::SetMuted(muted);
-        self.in_cmd.send(cmd).expect("Failed to send set muted command");
+        self.in_cmd
+            .send(cmd)
+            .expect("Failed to send set muted command");
         println!("Muted set to: {}", muted);
     }
 
@@ -222,15 +245,21 @@ impl Player {
             None => tag.first_tag(),
         };
         let id = Ulid::new().to_string();
-        let mut artists = tag.map_or_else(Vec::new, |t| t.get_strings(&ItemKey::TrackArtists).map(String::from).collect());
+        let mut artists = tag.map_or_else(Vec::new, |t| {
+            t.get_strings(&ItemKey::TrackArtists)
+                .map(String::from)
+                .collect()
+        });
         if artists.is_empty() {
             let artist = tag.and_then(|t| t.get_string(&ItemKey::TrackArtist).map(String::from));
             if let Some(artist) = artist {
                 artists.push(artist);
             }
         }
-        let album_art = tag.and_then(|t| t.pictures().get(0)).map(|p| p.data())
-        .map(|d| BASE64_STANDARD.encode(d));
+        let album_art = tag
+            .and_then(|t| t.pictures().get(0))
+            .map(|p| p.data())
+            .map(|d| BASE64_STANDARD.encode(d));
         Ok(Track {
             id,
             title: tag.and_then(|t| t.get_string(&ItemKey::TrackTitle).map(String::from)),
@@ -264,5 +293,5 @@ pub struct Track {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub enum TrackSource {
-    File(String)
+    File(String),
 }

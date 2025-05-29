@@ -24,6 +24,8 @@ pub fn initialize() -> Result<()> {
     let client = Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3")
         .build()?;
-    CLIENT.set(client).expect("Client should only be initialized once");
+    CLIENT
+        .set(client)
+        .expect("Client should only be initialized once");
     Ok(())
 }
