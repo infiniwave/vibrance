@@ -50,6 +50,19 @@ QIcon getIcon(const char* iconPath) {
     }
     return icon;
 } 
+QPushButton* createStyledIconButton(QWidget* parent, const char* iconPath, const char* tooltip, bool isFixed = true) {
+    QPushButton* button = new QPushButton(parent);
+    button->setIcon(getIcon(iconPath));
+    button->setToolTip(tooltip);
+    if (isFixed) {
+        button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    }
+    button->setStyleSheet("QPushButton { background: transparent; padding: 8px; border-radius: 4px; }"
+                      "QPushButton:hover { background: rgba(255, 255, 255, 0.1); }"
+                      "QPushButton:pressed { background: rgba(255, 255, 255, 0.2); }");
+    return button;
+}
+
 void MediaPlayer::setupUi()
 {
     if (objectName().isEmpty())
@@ -100,35 +113,12 @@ void MediaPlayer::setupUi()
     verticalLayout_2->setObjectName("verticalLayout_2");
     horizontalLayout_2 = new QHBoxLayout();
     horizontalLayout_2->setObjectName("horizontalLayout_2");
-    previousButton = new QPushButton(this);
-    previousButton->setObjectName("previousButton");
-    previousButton->setIcon(getIcon(":/previous.svg"));
-    previousButton->setToolTip("Previous");
-    previousButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    previousButton->setStyleSheet("QPushButton { background: transparent; padding: 8px; border-radius: 4px; }"
-                                "QPushButton:hover { background: rgba(255, 255, 255, 0.1); }"
-                                "QPushButton:pressed { background: rgba(255, 255, 255, 0.2); }");
+    previousButton = createStyledIconButton(this, ":/previous.svg", "Previous");
     horizontalLayout_2->addWidget(previousButton);
-    pauseButton = new QPushButton(this);
-    pauseButton->setObjectName("pauseButton");
-    pauseButton->setIcon(getIcon(":/play.svg"));
-    pauseButton->setToolTip("Play/Pause");
-    // pauseButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    pauseButton->setStyleSheet("QPushButton { background: transparent; padding: 8px; border-radius: 4px; }"
-                                "QPushButton:hover { background: rgba(255, 255, 255, 0.1); }"
-                                "QPushButton:pressed { background: rgba(255, 255, 255, 0.2); }");
-    connect(pauseButton, &QPushButton::clicked, this, [this]() {
-        pause();
-    });
+    pauseButton = createStyledIconButton(this, ":/play.svg", "Play/Pause", false);
+    connect(pauseButton, &QPushButton::clicked, this, [this]() { pause(); });
     horizontalLayout_2->addWidget(pauseButton);
-    nextButton = new QPushButton(this);
-    nextButton->setObjectName("nextButton");
-    nextButton->setIcon(getIcon(":/next.svg"));
-    nextButton->setToolTip("Next");
-    nextButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    nextButton->setStyleSheet("QPushButton { background: transparent; padding: 8px; border-radius: 4px; }"
-                                "QPushButton:hover { background: rgba(255, 255, 255, 0.1); }"
-                                "QPushButton:pressed { background: rgba(255, 255, 255, 0.2); }");
+    nextButton = createStyledIconButton(this, ":/next.svg", "Next");
     horizontalLayout_2->addWidget(nextButton);
     volumeButton = new QToolButton(this);
     volumeButton->setObjectName("volumeButton");

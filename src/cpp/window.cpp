@@ -35,8 +35,6 @@ void show_widget_window(std::int32_t argc, std::int8_t** argv) {
         qWarning("No valid font families loaded from the specified font files.");
     } else {
         qDebug() << "Using font family:" << dmSansFamily;
-    }
-    if (!dmSansFamily.isEmpty()) {
         QFont font(dmSansFamily);
         font.setPointSize(10);
         font.setStyleHint(QFont::SansSerif);

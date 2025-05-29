@@ -2,9 +2,10 @@ use std::{collections::HashMap, sync::Mutex};
 
 use anyhow::Result;
 use once_cell::sync::OnceCell;
+use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
-use crate::player::Track;
+use crate::player::{Track, TrackSource};
 
 pub static PREFERENCES: OnceCell<Mutex<Preferences>> = OnceCell::new();
 
@@ -36,7 +37,7 @@ impl Preferences {
         Ok(())
     }
     pub fn add_track_to_library(&mut self, folder: String, track: Track) {
-        self.user_library.entry(folder).or_default().insert(track.id.clone(), track);
+        self.add_tracks_to_library(folder, vec![track])
     }
     pub fn add_tracks_to_library(&mut self, folder: String, tracks: Vec<Track>) {
         let folder_tracks = self.user_library.entry(folder).or_default();
@@ -48,14 +49,9 @@ impl Preferences {
         // check if the track already exists by file name
         let existing_track = self.unorganized_tracks.iter().find(|(_, t)| 
             t.sources.iter().any(|source| 
-                if let crate::player::TrackSource::File(path) = source {
-                    if let crate::player::TrackSource::File(existing_path) = &track.sources[0] {
-                        existing_path == path
-                    } else {
-                        false
-                    }
-                } else {
-                    false
+                match (source, &track.sources[0]) {
+                    (TrackSource::File(existing_source), TrackSource::File(new_source)) => existing_source == new_source,
+                    _ => false,
                 }
             )
         );
@@ -64,6 +60,21 @@ impl Preferences {
             return;
         }
         self.unorganized_tracks.insert(track.id.clone(), track);
+    }
+    pub fn find_track_by_id(&self, id: &str) -> Option<Track> {
+        let mut track = self.unorganized_tracks.get(id).map(|track| track.clone());
+        if track.is_none() {
+            track = self.user_library
+                .par_iter()
+                .find_map_any(|(_, tracks)| tracks.par_iter().find_any(|track| track.1.id == id))
+                .map(|(_, track)| track.clone());
+        }
+        track
+    }
+    pub fn all_tracks(&self) -> Vec<Track> {
+        let tracks = self.unorganized_tracks.values().collect::<Vec<_>>();
+        let library = self.user_library.values().flat_map(|tracks| tracks.values()).collect::<Vec<_>>();
+        tracks.into_iter().par_bridge().chain(library.into_iter().par_bridge()).map(|t| t.clone()).collect()
     }
 }
 

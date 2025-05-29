@@ -17,6 +17,16 @@ MainWindow::~MainWindow()
     // Qt will delete child widgets automatically
 }
 
+QPushButton* createStyledButton(QWidget* parent, const QString& text, const char* iconPath) {
+    QPushButton* button = new QPushButton(parent);
+    button->setText(text);
+    button->setIcon(getIcon(iconPath));
+    button->setStyleSheet("QPushButton { padding: 8px; border-radius: 4px; border: 1px solid rgba(71,65,75,1); background: rgba(58,51,62,1); }"
+                      "QPushButton:hover { background: rgba(58,59,65, 0.8); }"
+                      "QPushButton:pressed { background: rgba(48,49,56, 0.8); }");
+    return button;
+}
+
 void MainWindow::setupUi()
 {
     if (objectName().isEmpty())
@@ -40,15 +50,7 @@ void MainWindow::setupUi()
 
     verticalLayout_2->addWidget(label, 0, Qt::AlignmentFlag::AlignHCenter|Qt::AlignmentFlag::AlignTop);
 
-    pushButton = new QPushButton(centralwidget);
-    pushButton->setObjectName("pushButton");
-    pushButton->setText(" Load media");
-    pushButton->setIcon(getIcon(":/folder_open.svg"));
-    pushButton->setStyleSheet("QPushButton { padding: 8px; border-radius: 4px; border: 1px solid rgba(71,65,75,1); background: rgba(58,51,62,1); }"
-                                "QPushButton:hover { background: rgba(58,59,65, 0.8); }"
-                                "QPushButton:pressed { background: rgba(48,49,56, 0.8); }");
-
-    // Connect the button to a lambda that opens a file dialog
+    pushButton = createStyledButton(centralwidget, " Load media", ":/folder_open.svg");
     connect(pushButton, &QPushButton::clicked, this, [this]() {
         QString fileName = QFileDialog::getOpenFileName(
             this,
@@ -62,13 +64,7 @@ void MainWindow::setupUi()
         }
     });
 
-    openMediaDirectoryButton = new QPushButton(centralwidget);
-    openMediaDirectoryButton->setObjectName("openMediaDirectoryButton");
-    openMediaDirectoryButton->setText(" Open media directory");
-    openMediaDirectoryButton->setStyleSheet("QPushButton { padding: 8px; border-radius: 4px; border: 1px solid rgba(71,65,75,1); background: rgba(58,51,62,1); }"
-                                "QPushButton:hover { background: rgba(58,59,65, 0.8); }"
-                                "QPushButton:pressed { background: rgba(48,49,56, 0.8); }");
-    openMediaDirectoryButton->setIcon(getIcon(":/folder_list.svg"));
+    openMediaDirectoryButton = createStyledButton(centralwidget, " Open media directory", ":/folder_list.svg");
     connect(openMediaDirectoryButton, &QPushButton::clicked, this, [this]() {
         QString dir = QFileDialog::getExistingDirectory(
             this,
