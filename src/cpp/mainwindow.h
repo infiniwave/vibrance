@@ -19,6 +19,8 @@
 #include <vector>
 #include "mediaplayer.h"
 #include "../../target/cxxbridge/vibrance/src/main.rs.h"
+#include "qlistwidgeta.h"
+#include "navigationitem.h"
 
 class MainWindow : public QMainWindow
 {
@@ -59,6 +61,11 @@ private:
     QTabWidget *tabWidget;
     std::vector<double> lyricTimestamps;
     void setupUi();
+
+    NavigationItem* homeItemWidget;
+    NavigationItem* libraryItemWidget;
+    NavigationItem* settingsItemWidget;
+    NavigationItem* searchItemWidget;
 
 public slots:
     void loadLyrics();

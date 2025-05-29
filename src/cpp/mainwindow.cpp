@@ -5,6 +5,7 @@
 #include "mainwindow.h"
 #include "trackitem.h"
 #include "../../target/cxxbridge/vibrance/src/main.rs.h"
+#include <QStackedWidget>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -80,6 +81,35 @@ void MainWindow::setupUi()
 
     verticalLayout_2->addWidget(pushButton, 0, Qt::AlignmentFlag::AlignTop);
     verticalLayout_2->addWidget(openMediaDirectoryButton, 0, Qt::AlignmentFlag::AlignTop);
+    QListWidgetA* nav = new QListWidgetA(centralwidget);
+    nav->setStyleSheet("QListWidget { background: transparent; border: none; }"
+                                 "QListWidget::item { color: white; border-radius: 8px; padding: 0px; margin: 0px; outline: none; }"
+                                 "QListWidget::item:selected { background: rgba(50, 50, 50, 0.5); }"
+                                 "QListWidget::item:hover { background: rgba(40, 40, 40, 0.5); }");
+    
+    // TODO: this is quickly getting out of hand, refactor this
+    QListWidgetItem* homeItem = new QListWidgetItem();
+    homeItemWidget = new NavigationItem("Home", ":/home.svg");
+    homeItem->setSizeHint(homeItemWidget->sizeHint());
+    nav->addItem(homeItem);
+    nav->setItemWidget(homeItem, homeItemWidget);
+    QListWidgetItem* libraryItem = new QListWidgetItem();
+    libraryItemWidget = new NavigationItem("Library", ":/library.svg");
+    libraryItem->setSizeHint(libraryItemWidget->sizeHint());
+    nav->addItem(libraryItem);
+    nav->setItemWidget(libraryItem, libraryItemWidget);
+    QListWidgetItem* searchItem = new QListWidgetItem();
+    searchItemWidget = new NavigationItem("Search", ":/search.svg");
+    searchItem->setSizeHint(searchItemWidget->sizeHint());
+    nav->addItem(searchItem);
+    nav->setItemWidget(searchItem, searchItemWidget);
+    QListWidgetItem* settingsItem = new QListWidgetItem();
+    settingsItemWidget = new NavigationItem("Settings", ":/settings.svg");
+    settingsItem->setSizeHint(settingsItemWidget->sizeHint());
+    nav->addItem(settingsItem);
+    nav->setItemWidget(settingsItem, settingsItemWidget);
+    nav->setCurrentRow(0);
+    verticalLayout_2->addWidget(nav, 0, Qt::AlignmentFlag::AlignTop);
 
     verticalSpacer = new QSpacerItem(20, 40, QSizePolicy::Policy::Minimum, QSizePolicy::Policy::Expanding);
 
@@ -92,10 +122,39 @@ void MainWindow::setupUi()
     tabWidget->setStyleSheet("QTabWidget::pane { border: 0px; } QTabBar::tab { background: rgba(30, 30, 30, 0.5); color: white; padding: 8px; border-radius: 8px; } QTabBar::tab:selected { background: rgba(50, 50, 50, 0.5); }");
     verticalLayout_3 = new QVBoxLayout();
     verticalLayout_3->setObjectName("verticalLayout_3");
-    trackList = new QListWidget();
+    QStackedWidget* stackedWidget = new QStackedWidget();
+    trackList = new QListWidgetA();
     trackList->setObjectName("trackList");
     trackList->setStyleSheet("background: rgba(30, 30, 30, 0.5); color: white; border-radius: 8px;");
-    tabWidget->addTab(trackList, "Tracks");
+    stackedWidget->addWidget(trackList);
+    // QLabel* noTracksLabel = new QLabel("No tracks available");
+    QLabel* libraryLabelTmp = new QLabel("Library");
+    QLabel* searchLabelTmp = new QLabel("Search");
+    QLabel* settingsLabelTmp = new QLabel("Settings");
+    stackedWidget->addWidget(libraryLabelTmp);
+    stackedWidget->addWidget(searchLabelTmp);
+    stackedWidget->addWidget(settingsLabelTmp);
+    stackedWidget->setCurrentIndex(0);
+    stackedWidget->setStyleSheet("QStackedWidget { background: rgba(30, 30, 30, 0.5); color: white; border-radius: 8px; }");
+    connect(nav, &QListWidget::currentRowChanged, stackedWidget, [this, stackedWidget](int index) {
+        stackedWidget->setCurrentIndex(index);
+        homeItemWidget->setActive(false);
+        libraryItemWidget->setActive(false);
+        searchItemWidget->setActive(false);
+        settingsItemWidget->setActive(false);
+        if (index == 0) {
+            homeItemWidget->setActive(true);
+        } else if (index == 1) {
+            libraryItemWidget->setActive(true);
+        } else if (index == 2) {
+            searchItemWidget->setActive(true);
+        } else if (index == 3) {
+            settingsItemWidget->setActive(true);
+        }
+    });
+    nav->setCurrentRow(0);
+    homeItemWidget->setActive(true);
+    tabWidget->addTab(stackedWidget, "Tracks");
     lyricScrollArea = new QScrollArea(this);
     lyricContainer = new QWidget;
     lyricLayout = new QVBoxLayout(lyricContainer);

@@ -32,6 +32,7 @@ private:
     // UI elements
     QHBoxLayout *horizontalLayout;
     QFrame *frame;
+    QLabel *albumArt;
     QLabel *trackTitle;
     QLabel *trackArtists;
     QVBoxLayout *trackDetails;

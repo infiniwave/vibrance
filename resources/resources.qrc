@@ -6,6 +6,10 @@
         <file>./play.svg</file>
         <file>./previous.svg</file>
         <file>./next.svg</file>
+        <file>./home.svg</file>
+        <file>./settings.svg</file>
+        <file>./library.svg</file>
+        <file>./search.svg</file>
         <file>./folder_list.svg</file>
         <file>./folder_open.svg</file>
         <file>./fonts/dm-sans-italic-variable.ttf</file>
