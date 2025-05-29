@@ -15,7 +15,7 @@ void mediaplayer_set_progress(std::uintptr_t mediaplayer, double value);
 void mediaplayer_set_track(std::uintptr_t mediaplayer, rust::String title, rust::String artists, rust::String album, double duration);
 void mediaplayer_set_paused(std::uintptr_t mediaplayer, bool paused);
 void* get_mainwindow_hwnd();
-void add_track(std::uintptr_t mainwindow, rust::String id, rust::String title, rust::String artists);
+void add_track(std::uintptr_t mainwindow, rust::String id, rust::String title, rust::String artists, rust::String albumArt);
 #ifdef __cplusplus
 }
 #endif

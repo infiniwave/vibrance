@@ -52,9 +52,9 @@ void MainWindow::setupUi()
     connect(pushButton, &QPushButton::clicked, this, [this]() {
         QString fileName = QFileDialog::getOpenFileName(
             this,
-            tr("Open Audio File"),
+            tr("Open audio file"),
             "",
-            tr("Audio Files (*.mp3 *.wav *.ogg *.flac);;All Files (*)")
+            tr("Audio files (*.mp3 *.wav *.ogg *.flac);;All files (*)")
         );
         if (!fileName.isEmpty()) {
             // Call the Rust function via cxx bridge (no rust:: namespace)
@@ -72,7 +72,7 @@ void MainWindow::setupUi()
     connect(openMediaDirectoryButton, &QPushButton::clicked, this, [this]() {
         QString dir = QFileDialog::getExistingDirectory(
             this,
-            tr("Open Media Directory"),
+            tr("Open media directory"),
             "",
             QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks
         );
@@ -146,9 +146,9 @@ void MainWindow::paintEvent(QPaintEvent *event)
     QMainWindow::paintEvent(event);
 }
 
-void MainWindow::addTrack(rust::String id, rust::String title, rust::String artists) {
+void MainWindow::addTrack(rust::String id, rust::String title, rust::String artists, rust::String albumArt) {
     QListWidgetItem* item = new QListWidgetItem(trackList);
-    TrackItem* trackWidget = new TrackItem(std::string(id), QString::fromStdString(std::string(title)), QString::fromStdString(std::string(artists)), "");
+    TrackItem* trackWidget = new TrackItem(std::string(id), QString::fromStdString(std::string(title)), QString::fromStdString(std::string(artists)), std::string(albumArt));
     item->setSizeHint(trackWidget->sizeHint());
     trackList->addItem(item);
     trackList->setItemWidget(item, trackWidget);
@@ -160,7 +160,7 @@ void MainWindow::showEvent(QShowEvent *event)
     if (!initialized) {
         auto tracks = get_track_list();
         for (const auto& track : tracks) {
-            addTrack(track.id, track.title, track.artists);
+            addTrack(track.id, track.title, track.artists, track.album_art);
         }
         initialize_controls();
         initialized = true;

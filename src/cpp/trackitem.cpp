@@ -1,16 +1,44 @@
 #include "trackitem.h"
 #include "../../target/cxxbridge/vibrance/src/main.rs.h"
+#include <QPainterPath>
 
-TrackItem::TrackItem(std::string id, const QString &title, const QString &artist, const QString &albumArtPath, QWidget *parent)
+QPixmap getAlbumArtPixmap(QByteArray base64ImageData, int size) {
+    QImage image;
+    image.loadFromData(base64ImageData);
+
+    QPixmap pixmap = QPixmap::fromImage(image).scaled(QSize(size, size), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+    QPixmap roundedPixmap(QSize(size, size));
+    roundedPixmap.fill(Qt::transparent);
+    QPainter painter(&roundedPixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    QPainterPath path;
+    path.addRoundedRect(roundedPixmap.rect(), 8, 8);
+    painter.setClipPath(path);
+    painter.drawPixmap(0, 0, pixmap);
+    painter.end();
+    return pixmap;
+}
+
+TrackItem::TrackItem(std::string id, const QString &title, const QString &artist, std::string albumArtData, QWidget *parent)
     : QWidget(parent)
 {
     layout = new QHBoxLayout(this);
 
     // Album Art
-    albumArt = new QLabel;
-    QPixmap pixmap(albumArtPath);
-    albumArt->setPixmap(pixmap.scaled(50, 50, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    layout->addWidget(albumArt);
+    int size = 60; 
+    albumArtFrame = new QFrame(this);
+    albumArtFrame->setEnabled(true);
+    albumArtFrame->setMinimumSize(QSize(size, size));
+    albumArtFrame->setMaximumSize(QSize(size, size));
+    albumArt = new QLabel(albumArtFrame);
+    albumArt->setGeometry(QRect(0, 0, size, size));
+    albumArt->setMinimumSize(QSize(size, size));
+    albumArt->setMaximumSize(QSize(size, size));
+    QByteArray base64ImageData = QByteArray::fromBase64(albumArtData.c_str());
+    if (!base64ImageData.isEmpty()) {
+        albumArt->setPixmap(getAlbumArtPixmap(base64ImageData, size));
+    }
+    layout->addWidget(albumArtFrame);
 
     // Title and Artist
     textLayout = new QVBoxLayout;
@@ -24,7 +52,9 @@ TrackItem::TrackItem(std::string id, const QString &title, const QString &artist
 
     // Spacer and Play Button
     layout->addStretch();
-    playButton = new QPushButton("Play");
+    playButton = new QPushButton();
+    playButton->setIcon(getIcon(":/play.svg"));
+    playButton->setToolTip("Play track");
     connect(playButton, &QPushButton::clicked, this, [id]() {
         play(id); // Call the Rust function to play the track
     });

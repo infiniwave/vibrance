@@ -3,6 +3,8 @@
 #include "../../target/cxxbridge/vibrance/src/main.rs.h"
 #include "mainwindow.h"
 #include <QSvgRenderer>
+#include <QPainterPath>
+#include "trackitem.h"
 
 MediaPlayer::MediaPlayer(QWidget *parent)
     : QWidget(parent)
@@ -57,13 +59,23 @@ void MediaPlayer::setupUi()
     setMaximumSize(QSize(16777215, 150));
     horizontalLayout = new QHBoxLayout(this);
     horizontalLayout->setObjectName("horizontalLayout");
+    int size = 120; 
     frame = new QFrame(this);
     frame->setObjectName("frame");
     frame->setEnabled(true);
-    frame->setMinimumSize(QSize(120, 120));
-    frame->setMaximumSize(QSize(120, 120));
+    frame->setMinimumSize(QSize(size, size));
+    frame->setMaximumSize(QSize(size, size));
     frame->setFrameShape(QFrame::Shape::StyledPanel);
     frame->setFrameShadow(QFrame::Shadow::Raised);
+    albumArt = new QLabel(frame);
+    albumArt->setObjectName("albumArt");
+    albumArt->setGeometry(QRect(0, 0, size, size));
+    albumArt->setMinimumSize(QSize(size, size));
+    albumArt->setMaximumSize(QSize(size, size));
+    // albumArt->setPixmap(QPixmap(":/album_art_placeholder.png"));
+    albumArt->setScaledContents(true);
+    albumArt->setAlignment(Qt::AlignmentFlag::AlignCenter);
+    albumArt->setStyleSheet("QLabel { border-radius: 8px; }");
     horizontalLayout->addWidget(frame);
     trackTitle = new QLabel(this);
     trackTitle->setObjectName("trackTitle");
@@ -210,6 +222,15 @@ void MediaPlayer::setTrack(std::string title, std::string artists, std::string a
             mw->loadLyrics();
         }
     }
+    albumArt->clear();
+    QByteArray base64ImageData = QByteArray::fromBase64(album.c_str());
+    if (base64ImageData.isEmpty()) {
+        qDebug() << "Failed to decode base64 image data";
+        return;
+    }
+    
+    QPixmap pixmap = getAlbumArtPixmap(base64ImageData, 120);
+    albumArt->setPixmap(pixmap);
 }
 
 

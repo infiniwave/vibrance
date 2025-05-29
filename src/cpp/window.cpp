@@ -97,8 +97,8 @@ void* get_mainwindow_hwnd() {
     return nullptr;
 }
 
-void add_track(std::uintptr_t mainwindow, rust::String id, rust::String title, rust::String artists) {
+void add_track(std::uintptr_t mainwindow, rust::String id, rust::String title, rust::String artists, rust::String albumArt) {
     if (mainwindow && g_mainwindow) {
-        g_mainwindow->addTrack(id, title, artists);
+        g_mainwindow->addTrack(id, title, artists, albumArt);
     }
 }

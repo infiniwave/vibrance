@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+pub mod album_art;
 pub mod controls;
 pub mod lyrics;
 pub mod player;
@@ -30,7 +31,7 @@ mod ffi {
         unsafe fn mediaplayer_set_progress(mediaplayer: usize, value: f64);
         unsafe fn mediaplayer_set_track(mediaplayer: usize, title: String, artists: String, album: String, duration: f64);
         unsafe fn mediaplayer_set_paused(mediaplayer: usize, paused: bool);
-        unsafe fn add_track(mainwindow: usize, id: String, title: String, artists: String);
+        unsafe fn add_track(mainwindow: usize, id: String, title: String, artists: String, album_art: String);
     }
     extern "Rust" {
         fn process_audio_file(path: &str);
@@ -51,7 +52,7 @@ mod ffi {
         title: String,
         artists: String,
         album: String,
-        album_art_path: String,
+        album_art: String,
         duration: f64,
     }
 
@@ -143,7 +144,7 @@ pub fn get_track_list() -> Vec<ffi::TrackInfo> {
             title: track.title.clone().unwrap_or_else(|| "Unknown Title".to_string()),
             artists,
             album: track.album.clone().unwrap_or_else(|| "Unknown Album".to_string()),
-            album_art_path: "default_album_art.png".to_string(),
+            album_art: track.album_art.clone().unwrap_or("".to_string()),
             duration: track.duration.clone(),
         }
     }).collect()
@@ -179,7 +180,7 @@ pub fn process_audio_file(path: &str) {
     player.add_track(track.clone());
     let mainwindow = unsafe { ffi::get_mainwindow() };
     unsafe {
-        ffi::add_track(mainwindow, track.id.clone(), track.title.clone().unwrap_or("Unknown Title".to_string()), track.artists.join(", "));
+        ffi::add_track(mainwindow, track.id.clone(), track.title.clone().unwrap_or("Unknown Title".to_string()), track.artists.join(", "), track.album_art.clone().unwrap_or("".to_string()));
     }
     player.play();
     println!("Track added and playback started.");
@@ -213,14 +214,14 @@ pub fn open_media_directory(directory_path: &str) {
                 Err(_) => None,
             }
         })
-        .map(|path| {
-            player.resolve_track(path).expect("Failed to resolve track")
+        .filter_map(|path| {
+            player.resolve_track(path).ok()
         })
         .collect::<Vec<_>>();
     let mainwindow = unsafe { ffi::get_mainwindow() };
     unsafe {
         for track in &files {
-            ffi::add_track(mainwindow, track.id.clone(), track.title.clone().unwrap_or("Unknown Title".to_string()), track.artists.join(", "));
+            ffi::add_track(mainwindow, track.id.clone(), track.title.clone().unwrap_or("Unknown Title".to_string()), track.artists.join(", "), track.album_art.clone().unwrap_or("".to_string()));
         }
     }
     let preferences = PREFERENCES.get().expect("Preferences not initialized");
@@ -315,7 +316,7 @@ fn main() {
                             album: Some(&album.unwrap_or("Unknown Album".to_string())),
                             duration: Some(Duration::from_secs_f64(track.duration)),
                             artist: Some(&track.artists.join(", ")),
-                            cover_url: None
+                            cover_url: None,
                         });
                         let media_player = unsafe { ffi::get_mainwindow_mediaplayer() };
                         unsafe {
@@ -323,7 +324,7 @@ fn main() {
                                 media_player, 
                                 track.title.unwrap_or("Unknown Title".to_string()), 
                                 track.artists.join(", "), 
-                                track.album.unwrap_or_default(), 
+                                track.album_art.unwrap_or(String::new()), 
                                 track.duration
                             );
                         }

@@ -1,6 +1,7 @@
 use std::{fs::File, io::BufReader, path::PathBuf, sync::{mpsc::channel, Arc, Mutex}, thread, time::Duration};
 
 use anyhow::Result;
+use base64::{prelude::BASE64_STANDARD, Engine};
 use chrono::Utc;
 use lofty::{file::{AudioFile, TaggedFileExt}, probe::Probe, tag::ItemKey};
 use rodio::{Decoder, OutputStream, Sink, Source};
@@ -228,11 +229,14 @@ impl Player {
                 artists.push(artist);
             }
         }
+        let album_art = tag.and_then(|t| t.pictures().get(0)).map(|p| p.data())
+        .map(|d| BASE64_STANDARD.encode(d));
         Ok(Track {
             id,
             title: tag.and_then(|t| t.get_string(&ItemKey::TrackTitle).map(String::from)),
             artists,
             album: tag.and_then(|t| t.get_string(&ItemKey::AlbumTitle).map(String::from)),
+            album_art,
             duration: properties.duration().as_secs_f64(),
             sources: vec![TrackSource::File(path.to_string_lossy().to_string())],
         })
@@ -253,6 +257,7 @@ pub struct Track {
     pub title: Option<String>,
     pub artists: Vec<String>,
     pub album: Option<String>,
+    pub album_art: Option<String>, // base64 encoded image data
     pub duration: f64,
     pub sources: Vec<TrackSource>,
 }

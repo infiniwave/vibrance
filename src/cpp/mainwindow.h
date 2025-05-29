@@ -29,7 +29,7 @@ public:
     ~MainWindow();
 
     MediaPlayer* getMediaPlayer();
-    void addTrack(rust::String id, rust::String title, rust::String artists);
+    void addTrack(rust::String id, rust::String title, rust::String artists, rust::String albumArt);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
