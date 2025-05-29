@@ -18,6 +18,8 @@
 #include <QSvgRenderer>
 #include <QPainter>
 
+QIcon getIcon(const char* iconPath);
+
 class MediaPlayer : public QWidget
 {
     Q_OBJECT

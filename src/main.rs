@@ -8,7 +8,6 @@ pub mod providers;
 use std::{fs, sync::Mutex, time::Duration};
 
 use cxx;
-use lrc::Lyrics;
 use lyrics::LyricSource;
 use once_cell::sync::OnceCell;
 use player::{Player, PlayerEvent};

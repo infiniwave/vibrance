@@ -4,6 +4,7 @@
 #include "mainwindow.h"
 #include <QtCore/QResource>
 #include <QWidget>
+#include <QFontDatabase>
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -13,11 +14,42 @@ static MainWindow* g_mainwindow = nullptr;
 void show_widget_window(std::int32_t argc, std::int8_t** argv) {
     Q_INIT_RESOURCE(resources);
     QApplication app(argc, reinterpret_cast<char**>(argv));
+    QStringList fontFiles = {
+        ":/fonts/dm-sans-italic-variable.ttf",
+        ":/fonts/dm-sans-variable.ttf",
+    };
+    QStringList loadedFamilies;
+    for (const QString& file : fontFiles) {
+        int id = QFontDatabase::addApplicationFont(file);
+        if (id == -1) {
+            qWarning("Failed to load font: %s", qPrintable(file));
+        } else {
+            QStringList families = QFontDatabase::applicationFontFamilies(id);
+            qDebug() << "Loaded font families from" << file << ":" << families;
+            loadedFamilies.append(families);
+        }
+    }
+
+    QString dmSansFamily = loadedFamilies.isEmpty() ? QString() : loadedFamilies.first();
+    if (dmSansFamily.isEmpty()) {
+        qWarning("No valid font families loaded from the specified font files.");
+    } else {
+        qDebug() << "Using font family:" << dmSansFamily;
+    }
+    if (!dmSansFamily.isEmpty()) {
+        QFont font(dmSansFamily);
+        font.setPointSize(10);
+        font.setStyleHint(QFont::SansSerif);
+        font.setStyleStrategy(QFont::PreferAntialias);
+        font.setWeight(QFont::Normal);
+        app.setFont(font);
+    }
+
     MainWindow window;
     g_mainwindow = &window;
     window.setWindowIcon(QIcon(":/app.ico"));
     window.setWindowTitle("Vibrance");
-    window.resize(800, 600); // match the UI default size
+    window.resize(900, 700); // match the UI default size
     window.show();
     app.exec();
     g_mainwindow = nullptr;

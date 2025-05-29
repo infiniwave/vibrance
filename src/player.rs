@@ -75,6 +75,9 @@ impl Player {
                             println!("Playing track: {}", current_duration);
                             sink.append(source);
                             sink.play();
+                            in_evt.send(PlayerEvent::Resumed).unwrap_or_else(|_| {
+                                println!("Failed to send unpause event");
+                            });
                         },
                         PlayerCommand::Seek(pos) => {
                             sink.try_seek(Duration::from_secs_f32(pos * current_duration)).unwrap_or_else(|_| {

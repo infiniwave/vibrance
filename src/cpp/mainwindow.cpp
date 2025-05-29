@@ -35,7 +35,6 @@ void MainWindow::setupUi()
     label->setObjectName("label");
     label->setText("Vibrance");
     QFont font;
-    font.setFamilies({QString::fromUtf8("HONOR Sans")});
     font.setPointSize(16);
     label->setFont(font);
 
@@ -43,7 +42,11 @@ void MainWindow::setupUi()
 
     pushButton = new QPushButton(centralwidget);
     pushButton->setObjectName("pushButton");
-    pushButton->setText("Load media");
+    pushButton->setText(" Load media");
+    pushButton->setIcon(getIcon(":/folder_open.svg"));
+    pushButton->setStyleSheet("QPushButton { padding: 8px; border-radius: 4px; border: 1px solid rgba(71,65,75,1); background: rgba(58,51,62,1); }"
+                                "QPushButton:hover { background: rgba(58,59,65, 0.8); }"
+                                "QPushButton:pressed { background: rgba(48,49,56, 0.8); }");
 
     // Connect the button to a lambda that opens a file dialog
     connect(pushButton, &QPushButton::clicked, this, [this]() {
@@ -61,7 +64,11 @@ void MainWindow::setupUi()
 
     openMediaDirectoryButton = new QPushButton(centralwidget);
     openMediaDirectoryButton->setObjectName("openMediaDirectoryButton");
-    openMediaDirectoryButton->setText("Open media directory");
+    openMediaDirectoryButton->setText(" Open media directory");
+    openMediaDirectoryButton->setStyleSheet("QPushButton { padding: 8px; border-radius: 4px; border: 1px solid rgba(71,65,75,1); background: rgba(58,51,62,1); }"
+                                "QPushButton:hover { background: rgba(58,59,65, 0.8); }"
+                                "QPushButton:pressed { background: rgba(48,49,56, 0.8); }");
+    openMediaDirectoryButton->setIcon(getIcon(":/folder_list.svg"));
     connect(openMediaDirectoryButton, &QPushButton::clicked, this, [this]() {
         QString dir = QFileDialog::getExistingDirectory(
             this,
@@ -208,6 +215,6 @@ void MainWindow::updateLyricHighlight(double currentTime) {
     }
     if (!lyricLabels.isEmpty()) {
         QWidget *highlighted = lyricLabels[highlightIndex];
-        lyricScrollArea->ensureWidgetVisible(highlighted, 0, 40);
+        lyricScrollArea->ensureWidgetVisible(highlighted, 100000, 40);
     }
 }

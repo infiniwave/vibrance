@@ -67,9 +67,8 @@ void MediaPlayer::setupUi()
     horizontalLayout->addWidget(frame);
     trackTitle = new QLabel(this);
     trackTitle->setObjectName("trackTitle");
-    trackTitle->setMaximumSize(QSize(200, 16777215));
+    trackTitle->setMaximumSize(QSize(300, 16777215));
     QFont font;
-    font.setFamilies({QString::fromUtf8("HONOR Sans CN")});
     font.setPointSize(16);
     trackTitle->setFont(font);
     trackTitle->setText("Track Title");
@@ -100,12 +99,9 @@ void MediaPlayer::setupUi()
     horizontalLayout_2->addWidget(previousButton);
     pauseButton = new QPushButton(this);
     pauseButton->setObjectName("pauseButton");
-    QFont font1;
-    font1.setFamilies({QString::fromUtf8("HONOR Sans")});
-    pauseButton->setFont(font1);
     pauseButton->setIcon(getIcon(":/play.svg"));
     pauseButton->setToolTip("Play/Pause");
-    pauseButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    // pauseButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     pauseButton->setStyleSheet("QPushButton { background: transparent; padding: 8px; border-radius: 4px; }"
                                 "QPushButton:hover { background: rgba(255, 255, 255, 0.1); }"
                                 "QPushButton:pressed { background: rgba(255, 255, 255, 0.2); }");
