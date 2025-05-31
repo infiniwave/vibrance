@@ -5,7 +5,7 @@ use once_cell::sync::OnceCell;
 use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
-use crate::player::{Track, TrackSource};
+use crate::player::Track;
 
 pub static PREFERENCES: OnceCell<Mutex<Preferences>> = OnceCell::new();
 
@@ -52,14 +52,7 @@ impl Preferences {
     pub fn add_unorganized_track(&mut self, track: Track) {
         // check if the track already exists by file name
         let existing_track = self.unorganized_tracks.iter().find(|(_, t)| {
-            t.sources
-                .iter()
-                .any(|source| match (source, &track.sources[0]) {
-                    (TrackSource::File(existing_source), TrackSource::File(new_source)) => {
-                        existing_source == new_source
-                    }
-                    _ => false,
-                })
+            t.path == track.path || t.yt_id == track.yt_id
         });
         if let Some((_, existing_track)) = existing_track {
             // ignore if the track already exists
@@ -75,6 +68,22 @@ impl Preferences {
                 .par_iter()
                 .find_map_any(|(_, tracks)| tracks.par_iter().find_any(|track| track.1.id == id))
                 .map(|(_, track)| track.clone());
+        }
+        track
+    }
+    pub fn find_track_by_yt_id(&self, yt_id: &str) -> Option<Track> {
+        let mut track = self.unorganized_tracks
+            .values()
+            .find(|t| t.yt_id.as_deref() == Some(yt_id))
+            .cloned();
+        if track.is_none() {
+            track = self
+                .user_library
+                .par_iter()
+                .find_map_any(|(_, tracks)| {
+                    tracks.values().find(|t| t.yt_id.as_deref() == Some(yt_id))
+                })
+                .cloned();
         }
         track
     }

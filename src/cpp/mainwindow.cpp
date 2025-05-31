@@ -129,10 +129,33 @@ void MainWindow::setupUi()
     stackedWidget->addWidget(trackList);
     // QLabel* noTracksLabel = new QLabel("No tracks available");
     QLabel* libraryLabelTmp = new QLabel("Library");
-    QLabel* searchLabelTmp = new QLabel("Search");
-    QLabel* settingsLabelTmp = new QLabel("Settings");
     stackedWidget->addWidget(libraryLabelTmp);
-    stackedWidget->addWidget(searchLabelTmp);
+    searchContainer = new QVBoxLayout();
+    searchBoxContainer = new QHBoxLayout();
+    searchBox = new QLineEdit();
+    searchBox->setPlaceholderText("Search tracks...");
+    searchBoxContainer->addWidget(searchBox);
+    searchButton = createStyledButton(centralwidget, "Search", ":/search.svg");
+    connect(searchButton, &QPushButton::clicked, this, [this]() {
+        QString query = searchBox->text();
+        if (!query.isEmpty()) {
+            auto results = yt_search(query.toStdString());
+            searchList->clear();
+            for (const auto& track : results) {
+                addTrack_search(track.id, track.title, track.artists, track.album_art);
+            }
+        }
+    });
+    searchBoxContainer->addWidget(searchButton, 0, Qt::AlignmentFlag::AlignRight);
+    searchContainer->addWidget(searchBox);
+    searchList = new QListWidgetA();
+    searchList->setObjectName("searchList");
+    searchList->setStyleSheet("background: rgba(30, 30, 30, 0.5); color: white; border-radius: 8px;");
+    searchContainer->addWidget(searchList);
+    QWidget* searchContainerWidget = new QWidget();
+    searchContainerWidget->setLayout(searchContainer);
+    stackedWidget->addWidget(searchContainerWidget);
+    QLabel* settingsLabelTmp = new QLabel("Settings");
     stackedWidget->addWidget(settingsLabelTmp);
     stackedWidget->setCurrentIndex(0);
     stackedWidget->setStyleSheet("QStackedWidget { background: rgba(30, 30, 30, 0.5); color: white; border-radius: 8px; }");
@@ -207,6 +230,14 @@ void MainWindow::addTrack(rust::String id, rust::String title, rust::String arti
     item->setSizeHint(trackWidget->sizeHint());
     trackList->addItem(item);
     trackList->setItemWidget(item, trackWidget);
+}
+
+void MainWindow::addTrack_search(rust::String id, rust::String title, rust::String artists, rust::String albumArt) {
+    QListWidgetItem* item = new QListWidgetItem(searchList);
+    TrackItem* trackWidget = new TrackItem(std::string(id), QString::fromStdString(std::string(title)), QString::fromStdString(std::string(artists)), std::string(albumArt));
+    item->setSizeHint(trackWidget->sizeHint());
+    searchList->addItem(item);
+    searchList->setItemWidget(item, trackWidget);
 }
 
 void MainWindow::showEvent(QShowEvent *event)

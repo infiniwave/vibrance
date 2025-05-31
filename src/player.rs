@@ -70,19 +70,14 @@ impl Player {
                                 .unwrap_or_else(|_| {
                                     println!("Failed to send track loaded event");
                                 });
-                            let path = match track.sources.first() {
-                                Some(TrackSource::File(path)) => {
-                                    if !PathBuf::from(path).exists() {
-                                        println!("Track file does not exist: {}", path);
-                                        continue;
-                                    }
-                                    path.clone()
-                                }
-                                _ => {
-                                    println!("No valid track source found");
-                                    continue;
-                                }
+                            let Some(path) = track.path else {
+                                println!("Track path is None, skipping playback");
+                                continue;
                             };
+                            if !PathBuf::from(&path).exists() {
+                                println!("Track file does not exist: {}", path);
+                                continue;
+                            }
                             let file = File::open(&path).unwrap();
                             let source = Decoder::new(BufReader::new(file)).unwrap();
                             current_duration = source
@@ -267,7 +262,8 @@ impl Player {
             album: tag.and_then(|t| t.get_string(&ItemKey::AlbumTitle).map(String::from)),
             album_art,
             duration: properties.duration().as_secs_f64(),
-            sources: vec![TrackSource::File(path.to_string_lossy().to_string())],
+            path: Some(path.to_string_lossy().to_string()),
+            yt_id: None,
         })
     }
 
@@ -288,10 +284,6 @@ pub struct Track {
     pub album: Option<String>,
     pub album_art: Option<String>, // base64 encoded image data
     pub duration: f64,
-    pub sources: Vec<TrackSource>,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-pub enum TrackSource {
-    File(String),
+    pub path: Option<String>,
+    pub yt_id: Option<String>, 
 }

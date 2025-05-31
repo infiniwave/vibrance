@@ -21,6 +21,7 @@
 #include "../../target/cxxbridge/vibrance/src/main.rs.h"
 #include "qlistwidgeta.h"
 #include "navigationitem.h"
+#include <QLineEdit>
 
 class MainWindow : public QMainWindow
 {
@@ -32,6 +33,7 @@ public:
 
     MediaPlayer* getMediaPlayer();
     void addTrack(rust::String id, rust::String title, rust::String artists, rust::String albumArt);
+    void addTrack_search(rust::String id, rust::String title, rust::String artists, rust::String albumArt);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -66,6 +68,12 @@ private:
     NavigationItem* libraryItemWidget;
     NavigationItem* settingsItemWidget;
     NavigationItem* searchItemWidget;
+
+    QVBoxLayout *searchContainer;
+    QHBoxLayout *searchBoxContainer;
+    QLineEdit *searchBox;
+    QPushButton *searchButton;
+    QListWidgetA *searchList;
 
 public slots:
     void loadLyrics();

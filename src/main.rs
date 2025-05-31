@@ -13,6 +13,7 @@ use lyrics::LyricSource;
 use once_cell::sync::OnceCell;
 use player::{Player, PlayerEvent};
 use preferences::{PREFERENCES, read_preferences};
+use providers::youtube;
 use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use souvlaki::{MediaControls, MediaMetadata, MediaPlayback};
 use tokio::{runtime::Runtime, time::timeout};
@@ -56,6 +57,9 @@ mod ffi {
         fn get_track_list() -> Vec<TrackInfo>;
         fn play(id: &str);
         fn get_lyrics_for_current_track() -> Vec<LyricLine>;
+        
+        fn yt_search(query: &str) -> Vec<TrackInfo>;
+        fn yt_download(id: &str);
     }
 
     #[derive(Debug)]
@@ -77,6 +81,50 @@ mod ffi {
 
 static PLAYER: OnceCell<Mutex<Player>> = OnceCell::new();
 static CONTROLS: OnceCell<Mutex<MediaControls>> = OnceCell::new();
+
+pub fn yt_search(query: &str) -> Vec<ffi::TrackInfo> {
+    let rt = Runtime::new().unwrap();
+    rt.block_on(async move {
+        match providers::youtube::search_tracks(query).await {
+            Ok(tracks) => tracks
+                .into_iter()
+                .map(|track| ffi::TrackInfo {
+                    id: track.id,
+                    title: track.title,
+                    artists: track.artist,
+                    album: track.album,
+                    album_art: track.album_art.unwrap_or_default(),
+                    duration: track.duration as f64,
+                })
+                .collect(),
+            Err(e) => {
+                eprintln!("Failed to search YouTube tracks: {}", e);
+                vec![]
+            }
+        }
+    })
+}
+
+pub fn yt_download(id: &str) {
+    let rt = Runtime::new().unwrap();
+    rt.block_on(async move {
+        match providers::youtube::download_track_default(id).await {
+            Ok(track) => {
+                let mut player = PLAYER
+                    .get()
+                    .expect("Player not initialized")
+                    .lock()
+                    .expect("Failed to lock player mutex");
+                player.add_track(track);
+                player.play();
+                println!("YouTube track downloaded and playback started.");
+            }
+            Err(e) => {
+                eprintln!("Failed to download YouTube track: {}", e);
+            }
+        }
+    });
+}
 
 pub fn get_lyrics_for_current_track() -> Vec<ffi::LyricLine> {
     // let preferences = PREFERENCES.get().expect("Preferences not initialized").lock().expect("Failed to lock preferences mutex");
@@ -149,8 +197,8 @@ pub fn play(id: &str) {
         player.play();
         println!("Playback started for track with ID: {}", id);
     } else {
-        eprintln!("Track with ID {} not found", id);
-        return;
+        eprintln!("Track with ID {} not found, assuming yt track", id);
+        yt_download(id);    
     }
 }
 
@@ -347,6 +395,7 @@ fn main() {
         .expect("Failed to set preferences");
     println!("Preferences loaded successfully.");
     lyrics::initialize().expect("Failed to initialize lyrics client");
+    youtube::initialize_client();
     run_threaded(move || {
         let preferences = PREFERENCES
             .get()
@@ -471,19 +520,19 @@ fn main() {
     let player = Mutex::new(player);
     PLAYER.set(player).expect("Failed to initialize player");
     println!("Player initialized successfully.");
-    std::panic::set_hook(Box::new(|info| {
-        eprintln!("Panic occurred: {:?}", info);
-        let preferences = PREFERENCES
-            .get()
-            .expect("Preferences not initialized")
-            .lock()
-            .expect("Failed to lock preferences mutex");
-        if let Err(e) = preferences.save() {
-            eprintln!("Failed to save preferences on panic: {}", e);
-        } else {
-            println!("Preferences saved successfully on panic.");
-        }
-    }));
+    // std::panic::set_hook(Box::new(|info| {
+    //     eprintln!("Panic occurred: {:?} {:?}", info, info.payload());
+    //     let preferences = PREFERENCES
+    //         .get()
+    //         .expect("Preferences not initialized")
+    //         .lock()
+    //         .expect("Failed to lock preferences mutex");
+    //     if let Err(e) = preferences.save() {
+    //         eprintln!("Failed to save preferences on panic: {}", e);
+    //     } else {
+    //         println!("Preferences saved successfully on panic.");
+    //     }
+    // }));
     // Start the Qt application
     let args: Vec<std::ffi::CString> = std::env::args()
         .map(|arg| std::ffi::CString::new(arg).unwrap())
