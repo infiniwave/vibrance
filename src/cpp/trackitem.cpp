@@ -1,21 +1,29 @@
 #include "trackitem.h"
 #include "../../target/cxxbridge/vibrance/src/main.rs.h"
 #include <QPainterPath>
+#include <QGuiApplication>
+#include <QScreen>
 
 QPixmap getAlbumArtPixmap(QByteArray base64ImageData, int size) {
     QImage image;
     image.loadFromData(base64ImageData);
 
-    QPixmap pixmap = QPixmap::fromImage(image).scaled(QSize(size, size), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
-    QPixmap roundedPixmap(QSize(size, size));
+    qreal dpr = 1.0;
+    if (QGuiApplication::primaryScreen()) {
+        dpr = QGuiApplication::primaryScreen()->devicePixelRatio();
+    }
+
+    QPixmap pixmap = QPixmap::fromImage(image).scaled(QSize(size * dpr, size * dpr), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+    QPixmap roundedPixmap(QSize(size * dpr, size * dpr));
     roundedPixmap.fill(Qt::transparent);
     QPainter painter(&roundedPixmap);
     painter.setRenderHint(QPainter::Antialiasing);
     QPainterPath path;
-    path.addRoundedRect(roundedPixmap.rect(), 8, 8);
+    path.addRoundedRect(roundedPixmap.rect(), 8 * dpr, 8 * dpr);
     painter.setClipPath(path);
     painter.drawPixmap(0, 0, pixmap);
     painter.end();
+    roundedPixmap.setDevicePixelRatio(dpr);
     return roundedPixmap;
 }
 
