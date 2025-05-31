@@ -117,7 +117,9 @@ pub async fn download_track_default(id: &str) -> Result<Track> {
     drop(preferences);
     let client = YT_CLIENT.get().ok_or(anyhow::anyhow!("YouTube client not initialized"))?;
     let track = client.query().music_details(id).await?;
-    let album_cover = match track.track.cover.first() {
+    let mut covers = track.track.cover.clone();
+    covers.sort_by(|a, b| a.width.cmp(&b.width));
+    let album_cover = match covers.last() {
         Some(cover) => {
             let client = CLIENT.get().ok_or(anyhow::anyhow!("HTTP client not initialized"))?;
             let response = client.get(&cover.url).send().await?;
