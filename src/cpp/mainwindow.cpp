@@ -134,6 +134,7 @@ void MainWindow::setupUi()
     searchBoxContainer = new QHBoxLayout();
     searchBox = new QLineEdit();
     searchBox->setPlaceholderText("Search tracks...");
+    searchBox->setStyleSheet("padding: 8px;");
     searchBoxContainer->addWidget(searchBox);
     searchButton = createStyledButton(centralwidget, "Search", ":/search.svg");
     connect(searchButton, &QPushButton::clicked, this, [this]() {
