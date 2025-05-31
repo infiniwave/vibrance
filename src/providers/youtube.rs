@@ -1,11 +1,11 @@
-use std::{io::Write};
+use std::{io::SeekFrom, sync::Arc};
 
 use anyhow::Result;
 use base64::{prelude::BASE64_STANDARD, Engine};
-use futures::{future::{join_all, try_join_all}, StreamExt};
+use futures::{future::{join_all, try_join_all}, lock::Mutex};
 use once_cell::sync::OnceCell;
 use rustypipe::{client::RustyPipe, model::{AudioFormat, TrackItem}, param::StreamFilter};
-use tokio::{fs::File, io::AsyncWriteExt};
+use tokio::{fs::File, io::{AsyncSeekExt, AsyncWriteExt}};
 use ulid::Ulid;
 
 use crate::{lyrics::CLIENT, player::Track, preferences::PREFERENCES};
@@ -13,7 +13,7 @@ use crate::{lyrics::CLIENT, player::Track, preferences::PREFERENCES};
 pub static YT_CLIENT: OnceCell<RustyPipe> = OnceCell::new();
 
 pub fn initialize_client() -> &'static RustyPipe {
-    YT_CLIENT.get_or_init(|| RustyPipe::builder())
+    YT_CLIENT.get_or_init(|| RustyPipe::new())
 }
 
 #[derive(Debug, Clone)]
@@ -69,20 +69,42 @@ pub async fn download_track(id: &str, output_path: &str) -> Result<()> {
     let audio = track
         .select_audio_stream(&StreamFilter::new().audio_formats(vec![AudioFormat::M4a]))
         .ok_or(anyhow::anyhow!("No suitable audio stream found"))?;
-    let mut file = File::create(output_path).await?;
+    let file = File::create(output_path).await?;
     let client = CLIENT.get().ok_or(anyhow::anyhow!("HTTP client not initialized"))?;
     println!("Downloading track: {}", audio.url);
-    let mut response = client.get(audio.url.clone()).send().await?;
+    // download this file using parallel requests
+    // youtube throttles each request to a woeful 30 KB/s
+    let response = client.head(&audio.url).send().await?;
     if !response.status().is_success() {
-        return Err(anyhow::anyhow!("Failed to download track: HTTP {}", response.status()));
+        return Err(anyhow::anyhow!("Failed to download track: {}", response.status()));
     }
-    let mut stream = response.bytes_stream();
-    while let Some(chunk) = stream.next().await {
-        file.write_all(&chunk?).await?;
+    let total_size = response.headers().get("Content-Length").ok_or(anyhow::anyhow!("Failed to get content length"))?.to_str()?.parse::<u64>()?;
+    println!("Total size: {} bytes", total_size);
+    let file = Arc::new(Mutex::new(file));
+    let mut futures = Vec::new();
+    let chunk_size = 1024 * 128; // 128 KB
+    let mut start = 0;
+    while start < total_size {
+        let end = std::cmp::min(start + chunk_size as u64, total_size);
+        let file_clone = Arc::clone(&file);
+        let url = audio.url.clone();
+        futures.push(tokio::spawn(async move {
+            let range_header = format!("bytes={}-{}", start, end - 1);
+            let response = client.get(&url).header("Range", range_header).send().await?;
+            if !response.status().is_success() {
+                return Err(anyhow::anyhow!("Failed to download chunk: {}", response.status()));
+            }
+            println!("Downloading chunk: {}-{}", start, end - 1);
+            let mut file = file_clone.lock().await;
+            let bytes = response.bytes().await?;
+            file.seek(SeekFrom::Start(start)).await?;
+            file.write_all(&bytes).await?;
+            file.flush().await?;
+            Ok(())
+        }));
+        start += chunk_size as u64;
     }
-    // let response = response.bytes().await?;
-    // file.write_all(&response).await?;
-    file.flush().await?;
+    try_join_all(futures).await?.into_iter().collect::<Result<Vec<_>, _>>()?;    
     println!("Track downloaded to {}", output_path);
     Ok(())
 }
