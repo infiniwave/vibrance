@@ -110,7 +110,7 @@ pub async fn download_track(id: &str, output_path: &str) -> Result<()> {
 }
 
 pub async fn download_track_default(id: &str) -> Result<Track> {
-    let mut preferences = PREFERENCES.get().ok_or(anyhow::anyhow!("Preferences not initialized"))?.lock().map_err(|_| anyhow::anyhow!("Failed to lock preferences"))?;
+    let preferences = PREFERENCES.get().ok_or(anyhow::anyhow!("Preferences not initialized"))?.lock().map_err(|_| anyhow::anyhow!("Failed to lock preferences"))?;
     if let Some(track) = preferences.find_track_by_yt_id(id) {
         return Ok(track);
     }

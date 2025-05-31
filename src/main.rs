@@ -115,6 +115,8 @@ pub fn yt_download(id: &str) {
                     .expect("Player not initialized")
                     .lock()
                     .expect("Failed to lock player mutex");
+                let mainwindow = unsafe { ffi::get_mainwindow() };
+                add_track_to_mainwindow(&track, mainwindow);
                 player.add_track(track);
                 player.play();
                 println!("YouTube track downloaded and playback started.");
