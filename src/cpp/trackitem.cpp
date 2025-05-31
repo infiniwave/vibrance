@@ -16,7 +16,7 @@ QPixmap getAlbumArtPixmap(QByteArray base64ImageData, int size) {
     painter.setClipPath(path);
     painter.drawPixmap(0, 0, pixmap);
     painter.end();
-    return pixmap;
+    return roundedPixmap;
 }
 
 TrackItem::TrackItem(std::string id, const QString &title, const QString &artist, std::string albumArtData, QWidget *parent)
