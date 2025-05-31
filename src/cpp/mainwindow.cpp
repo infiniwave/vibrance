@@ -146,8 +146,9 @@ void MainWindow::setupUi()
             }
         }
     });
+    connect(searchBox, &QLineEdit::returnPressed, searchButton, &QPushButton::click);
     searchBoxContainer->addWidget(searchButton, 0, Qt::AlignmentFlag::AlignRight);
-    searchContainer->addWidget(searchBox);
+    searchContainer->addLayout(searchBoxContainer);
     searchList = new QListWidgetA();
     searchList->setObjectName("searchList");
     searchList->setStyleSheet("background: rgba(30, 30, 30, 0.5); color: white; border-radius: 8px;");
