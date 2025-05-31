@@ -81,7 +81,7 @@ impl LyricSource for QQProvider {
                 .replace("&nbsp;", " ")
                 .replace("&ensp;", " ")
                 .replace("&emsp;", " ");
-            let parsed = Lyrics::from_str(result)?
+            let mut parsed = Lyrics::from_str(&result)?
                 .get_timed_lines()
                 .iter()
                 .map(|line| LyricLine {
@@ -89,6 +89,14 @@ impl LyricSource for QQProvider {
                     text: line.1.to_string(),
                 })
                 .collect::<Vec<_>>();
+            if result.contains("此歌曲为没有填词的纯音乐，请您欣赏") {
+                // the lyric parser returns an empty vector for the one line response
+                // (纯音乐 = instrumental)
+                parsed.push(LyricLine {
+                    timestamp: 0.0,
+                    text: "This track is instrumental and thus does not have lyrics".to_string(),
+                });
+            }
             lyrics.push(crate::lyrics::Lyrics(parsed));
         }
         println!("Fetched lyrics: {:?}", lyrics);
