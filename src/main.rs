@@ -106,6 +106,22 @@ pub fn yt_search(query: &str) -> Vec<ffi::TrackInfo> {
 }
 
 pub fn yt_download(id: &str) {
+    let preferences = PREFERENCES
+        .get()
+        .expect("Preferences not initialized")
+        .lock()
+        .expect("Failed to lock preferences mutex");
+    if let Some(track) = preferences.find_track_by_yt_id(id) {
+        drop(preferences);
+        let mut player = PLAYER
+            .get()
+            .expect("Player not initialized")
+            .lock()
+            .expect("Failed to lock player mutex");
+        player.add_track(track);
+        player.play();
+    } else {
+        drop(preferences);
     let rt = Runtime::new().unwrap();
     rt.block_on(async move {
         match providers::youtube::download_track_default(id).await {
@@ -126,6 +142,7 @@ pub fn yt_download(id: &str) {
             }
         }
     });
+    }
 }
 
 pub fn get_lyrics_for_current_track() -> Vec<ffi::LyricLine> {

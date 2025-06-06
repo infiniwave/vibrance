@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Mutex};
 
 use anyhow::Result;
 use once_cell::sync::OnceCell;
-use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
 use crate::player::Track;
@@ -96,8 +96,7 @@ impl Preferences {
             .collect::<Vec<_>>();
         tracks
             .into_iter()
-            .par_bridge()
-            .chain(library.into_iter().par_bridge())
+            .chain(library.into_iter())
             .map(|t| t.clone())
             .collect()
     }

@@ -110,11 +110,6 @@ pub async fn download_track(id: &str, output_path: &str) -> Result<()> {
 }
 
 pub async fn download_track_default(id: &str) -> Result<Track> {
-    let preferences = PREFERENCES.get().ok_or(anyhow::anyhow!("Preferences not initialized"))?.lock().map_err(|_| anyhow::anyhow!("Failed to lock preferences"))?;
-    if let Some(track) = preferences.find_track_by_yt_id(id) {
-        return Ok(track);
-    }
-    drop(preferences);
     let client = YT_CLIENT.get().ok_or(anyhow::anyhow!("YouTube client not initialized"))?;
     let track = client.query().music_details(id).await?;
     let mut covers = track.track.cover.clone();
