@@ -7924,6 +7924,7 @@ dependencies = [
  "lofty",
  "lrc",
  "once_cell",
+ "raw-window-handle",
  "rayon",
  "reqwest",
  "rodio",
