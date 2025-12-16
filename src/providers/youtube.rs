@@ -8,11 +8,11 @@ use rustypipe::{client::RustyPipe, model::{AudioFormat, TrackItem}, param::Strea
 use tokio::{fs::File, io::{AsyncSeekExt, AsyncWriteExt}};
 use ulid::Ulid;
 
-use crate::{lyrics::CLIENT, player::Track, preferences::PREFERENCES};
+use crate::{lyrics::{self, CLIENT}, player::Track, preferences::PREFERENCES};
 
 pub static YT_CLIENT: OnceCell<RustyPipe> = OnceCell::new();
 
-pub fn initialize_client() -> &'static RustyPipe {
+pub fn get_client() -> &'static RustyPipe {
     YT_CLIENT.get_or_init(|| RustyPipe::new())
 }
 
@@ -27,14 +27,14 @@ pub struct YtTrack {
 }
 
 pub async fn search_tracks(query: &str) -> Result<Vec<YtTrack>> {
-    let client = YT_CLIENT.get().ok_or(anyhow::anyhow!("YouTube client not initialized"))?;
+    let client = get_client();
     let results = client.query().music_search_tracks(query).await?;
     let map_track = |track: TrackItem| async move {
         let album_art_url = track.cover.first().as_ref().map(|c| c.url.clone());
         let album_art = match album_art_url {
             Some(url) => {
                 async {
-                    let client = CLIENT.get()?;
+                    let client = lyrics::get_client().ok()?;
                     let response = client.get(url).send().await.ok()?;
                     if response.status().is_success() {
                         Some(BASE64_STANDARD.encode(response.bytes().await.ok()?))
@@ -64,13 +64,13 @@ pub async fn search_tracks(query: &str) -> Result<Vec<YtTrack>> {
 }
 
 pub async fn download_track(id: &str, output_path: &str) -> Result<()> {
-    let client = YT_CLIENT.get().ok_or(anyhow::anyhow!("YouTube client not initialized"))?;
+    let client = get_client();
     let track = client.query().player(id).await?;
     let audio = track
         .select_audio_stream(&StreamFilter::new().audio_formats(vec![AudioFormat::M4a]))
         .ok_or(anyhow::anyhow!("No suitable audio stream found"))?;
     let file = File::create(output_path).await?;
-    let client = CLIENT.get().ok_or(anyhow::anyhow!("HTTP client not initialized"))?;
+    let client = lyrics::get_client()?;
     println!("Downloading track: {}", audio.url);
     // download this file using parallel requests
     // youtube throttles each request to a woeful 30 KB/s
@@ -110,13 +110,13 @@ pub async fn download_track(id: &str, output_path: &str) -> Result<()> {
 }
 
 pub async fn download_track_default(id: &str) -> Result<Track> {
-    let client = YT_CLIENT.get().ok_or(anyhow::anyhow!("YouTube client not initialized"))?;
+    let client = get_client();
     let track = client.query().music_details(id).await?;
     let mut covers = track.track.cover.clone();
     covers.sort_by(|a, b| a.width.cmp(&b.width));
     let album_cover = match covers.last() {
         Some(cover) => {
-            let client = CLIENT.get().ok_or(anyhow::anyhow!("HTTP client not initialized"))?;
+            let client = lyrics::get_client()?;
             let response = client.get(&cover.url).send().await?;
             if response.status().is_success() {
                 Some(BASE64_STANDARD.encode(response.bytes().await?))
@@ -146,7 +146,7 @@ pub async fn download_track_default(id: &str) -> Result<Track> {
         path: Some(path),
         yt_id: Some(track.track.id.clone()),
     };
-    let mut preferences = PREFERENCES.get().ok_or(anyhow::anyhow!("Preferences not initialized"))?.lock().map_err(|_| anyhow::anyhow!("Failed to lock preferences"))?;
+    let mut preferences = PREFERENCES.get().ok_or(anyhow::anyhow!("Preferences not initialized"))?.write().await;
     preferences.add_unorganized_track(track.clone());
     drop(preferences);
     Ok(track)

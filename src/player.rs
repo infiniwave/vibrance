@@ -1,9 +1,6 @@
 use std::{
     fs::File,
-    io::BufReader,
     path::PathBuf,
-    sync::{Arc, Mutex, mpsc::channel},
-    thread,
     time::Duration,
 };
 
@@ -15,18 +12,23 @@ use lofty::{
     probe::Probe,
     tag::ItemKey,
 };
-use rodio::{Decoder, OutputStream, Sink, Source};
+use once_cell::sync::OnceCell;
+use rodio::{Decoder, OutputStreamBuilder, Sink, Source};
 use serde::{Deserialize, Serialize};
+use tokio::{sync::{Mutex, broadcast::{Receiver, Sender, channel}, mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel}}, task, time};
 use ulid::Ulid;
 
-use crate::PREFERENCES;
+use crate::preferences::PREFERENCES;
+
+/// Global player instance
+pub static PLAYER: OnceCell<Mutex<Player>> = OnceCell::new();
 
 #[derive(Debug, Clone)]
 pub struct Player {
     pub current_track: Option<Track>,
     pub queue: Vec<Track>,
-    pub in_cmd: std::sync::mpsc::Sender<PlayerCommand>,
-    pub out_evt: Arc<Mutex<std::sync::mpsc::Receiver<PlayerEvent>>>,
+    pub in_cmd: UnboundedSender<PlayerCommand>,
+    pub in_evt: Sender<PlayerEvent>,
 }
 
 pub enum PlayerCommand {
@@ -52,11 +54,12 @@ pub enum PlayerEvent {
 
 impl Player {
     pub fn new(volume: f32) -> Self {
-        let (in_cmd, out_cmd) = channel::<PlayerCommand>();
-        let (in_evt, out_evt) = channel::<PlayerEvent>();
-        thread::spawn(move || {
-            let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-            let sink = Sink::try_new(&stream_handle).unwrap();
+        let (in_cmd, mut out_cmd) = unbounded_channel::<PlayerCommand>();
+        let (in_evt, out_evt) = channel::<PlayerEvent>(25);
+        let in_evt_clone = in_evt.clone();
+        task::spawn(async move {
+            let stream = OutputStreamBuilder::open_default_stream().unwrap();
+            let sink = Sink::connect_new(stream.mixer());
             let mut current_duration = 0.0;
             let mut global_volume = volume;
             sink.set_volume(global_volume);
@@ -65,10 +68,10 @@ impl Player {
                 if let Ok(cmd) = out_cmd.try_recv() {
                     match cmd {
                         PlayerCommand::Play(track) => {
-                            in_evt
+                            in_evt_clone
                                 .send(PlayerEvent::TrackLoaded(track.clone()))
                                 .unwrap_or_else(|_| {
-                                    println!("Failed to send track loaded event");
+                                    println!("Failed to send track loaded event"); 0
                                 });
                             let Some(path) = track.path else {
                                 println!("Track path is None, skipping playback");
@@ -79,7 +82,7 @@ impl Player {
                                 continue;
                             }
                             let file = File::open(&path).unwrap();
-                            let source = Decoder::new(BufReader::new(file)).unwrap();
+                            let source = Decoder::try_from(file).unwrap();
                             current_duration = source
                                 .total_duration()
                                 .map(|d| d.as_secs_f32())
@@ -87,14 +90,15 @@ impl Player {
                             println!("Playing track: {}", current_duration);
                             sink.append(source);
                             sink.play();
-                            in_evt.send(PlayerEvent::Resumed).unwrap_or_else(|_| {
-                                println!("Failed to send unpause event");
+                            in_evt_clone.send(PlayerEvent::Resumed).unwrap_or_else(|_| {
+                                println!("Failed to send unpause event"); 0
                             });
                         }
                         PlayerCommand::Seek(pos) => {
+                            println!("Seeking to position: {:?} of {}", Duration::from_secs_f32(pos * current_duration), current_duration);
                             sink.try_seek(Duration::from_secs_f32(pos * current_duration))
-                                .unwrap_or_else(|_| {
-                                    println!("Failed to seek to position: {}", pos);
+                                .unwrap_or_else(|e| {
+                                    println!("Failed to seek to position: {:?}", e);
                                 });
                         }
                         PlayerCommand::Stop => {
@@ -104,15 +108,15 @@ impl Player {
                         PlayerCommand::Pause => {
                             if sink.is_paused() {
                                 sink.play();
-                                in_evt.send(PlayerEvent::Resumed).unwrap_or_else(|_| {
-                                    println!("Failed to send unpause event");
+                                in_evt_clone.send(PlayerEvent::Resumed).unwrap_or_else(|_| {
+                                    println!("Failed to send unpause event"); 0
                                 });
                             } else {
                                 sink.pause();
                                 let position = sink.get_pos().as_secs_f32() / current_duration;
-                                in_evt.send(PlayerEvent::Progress(position.into())).unwrap();
-                                in_evt.send(PlayerEvent::Paused).unwrap_or_else(|_| {
-                                    println!("Failed to send pause event");
+                                in_evt_clone.send(PlayerEvent::Progress(position.into())).unwrap();
+                                in_evt_clone.send(PlayerEvent::Paused).unwrap_or_else(|_| {
+                                    println!("Failed to send pause event"); 0
                                 });
                             }
                         }
@@ -122,8 +126,8 @@ impl Player {
                             let mut preferences = PREFERENCES
                                 .get()
                                 .expect("Preferences not initialized")
-                                .lock()
-                                .expect("Failed to lock preferences mutex");
+                                .write()
+                                .await;
                             preferences.volume = volume;
                             drop(preferences);
                         }
@@ -138,27 +142,27 @@ impl Player {
                 }
                 if sink.empty() && current_duration > 0.0 {
                     current_duration = 0.0;
-                    in_evt.send(PlayerEvent::End).unwrap_or_else(|_| {
-                        println!("Failed to send end event");
+                    in_evt_clone.send(PlayerEvent::End).unwrap_or_else(|_| {
+                        println!("Failed to send end event"); 0
                     });
                 } else if !sink.empty() && !sink.is_paused() {
                     if Utc::now().timestamp_millis() - last_progress_updated < 100 {
-                        thread::sleep(std::time::Duration::from_millis(100));
+                        time::sleep(std::time::Duration::from_millis(100)).await;
                         continue; // Skip if the last update was too recent
                     }
                     // Emit progress event based on current position
                     let position = sink.get_pos().as_secs_f32() / current_duration;
-                    in_evt.send(PlayerEvent::Progress(position.into())).unwrap();
+                    in_evt_clone.send(PlayerEvent::Progress(position.into())).unwrap();
                     last_progress_updated = Utc::now().timestamp_millis();
                 }
-                thread::sleep(std::time::Duration::from_millis(100));
+                time::sleep(std::time::Duration::from_millis(100)).await;
             }
         });
         Player {
             current_track: None,
             queue: Vec::new(),
             in_cmd,
-            out_evt: Arc::new(Mutex::new(out_evt)),
+            in_evt,
         }
     }
 
@@ -221,8 +225,8 @@ impl Player {
         println!("Muted set to: {}", muted);
     }
 
-    pub fn out_evt_receiver(&self) -> Arc<Mutex<std::sync::mpsc::Receiver<PlayerEvent>>> {
-        self.out_evt.clone()
+    pub fn out_evt_receiver(&self) -> Receiver<PlayerEvent> {
+        self.in_evt.subscribe()
     }
 
     pub fn resolve_track(&self, path: String) -> Result<Track> {

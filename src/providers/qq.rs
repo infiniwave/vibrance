@@ -3,10 +3,7 @@ use base64::{Engine, prelude::BASE64_STANDARD};
 use lrc::Lyrics;
 use reqwest::Url;
 
-use crate::{
-    ffi::LyricLine,
-    lyrics::{CLIENT, LyricSource},
-};
+use crate::lyrics::{CLIENT, LyricLine, LyricSource, get_client};
 
 pub struct QQProvider;
 impl LyricSource for QQProvider {
@@ -17,7 +14,7 @@ impl LyricSource for QQProvider {
             .append_pair("inCharset", "utf-8")
             .append_pair("outCharset", "utf-8")
             .append_pair("key", &format!("{title} {artist}"));
-        let client = CLIENT.get().unwrap();
+        let client = get_client()?;
         let request = client
             .get(url)
             .header("Referer", "http://y.qq.com/portal/player.html")

@@ -1,4 +1,2 @@
-target
-flag_check.exe
-moc_*.cpp
-qrc_*.cpp
+/target
+rustypipe_cache.json

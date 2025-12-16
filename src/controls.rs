@@ -3,8 +3,6 @@ use std::ffi::c_void;
 use anyhow::Result;
 use souvlaki::{MediaControlEvent, MediaControls, PlatformConfig};
 
-use crate::get_mainwindow_hwnd;
-
 pub fn initialize() -> Result<MediaControls> {
     let hwnd = try_get_hwnd()?;
     let mut controls = MediaControls::new(PlatformConfig {
@@ -17,10 +15,10 @@ pub fn initialize() -> Result<MediaControls> {
         .attach(|e| {
             match e {
                 MediaControlEvent::Pause => {
-                    crate::pause();
+                    // TODO: pause the player
                 }
                 MediaControlEvent::Play => {
-                    crate::pause();
+                    // TODO: play the player
                 }
                 _ => {
                     // Handle other events if needed

@@ -1,13 +1,14 @@
-use std::{collections::HashMap, sync::Mutex};
+use std::{collections::HashMap};
 
 use anyhow::Result;
 use once_cell::sync::OnceCell;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
+use tokio::{fs, sync::{Mutex, RwLock}};
 
 use crate::player::Track;
 
-pub static PREFERENCES: OnceCell<Mutex<Preferences>> = OnceCell::new();
+pub static PREFERENCES: OnceCell<RwLock<Preferences>> = OnceCell::new();
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct Preferences {
@@ -29,15 +30,15 @@ impl Default for Preferences {
 }
 
 impl Preferences {
-    pub fn save(&self) -> Result<()> {
+    pub async fn save(&self) -> Result<()> {
         let data = dirs::config_dir().ok_or(anyhow::anyhow!("Could not find config directory"))?;
         let config_path = data.join("Vibrance").join("vibrance.json");
-        std::fs::create_dir_all(
+        fs::create_dir_all(
             config_path
                 .parent()
                 .ok_or(anyhow::anyhow!("Could not find parent directory"))?,
-        )?;
-        std::fs::write(&config_path, serde_json::to_string(self)?)?;
+        ).await?;
+        fs::write(&config_path, serde_json::to_string(self)?).await?;
         Ok(())
     }
     pub fn add_track_to_library(&mut self, folder: String, track: Track) {
@@ -102,22 +103,22 @@ impl Preferences {
     }
 }
 
-pub fn read_preferences() -> Result<Preferences> {
+pub async fn read_preferences() -> Result<Preferences> {
     let data = dirs::config_dir().ok_or(anyhow::anyhow!("Could not find config directory"))?;
     let config_path = data.join("Vibrance").join("vibrance.json");
     if !config_path.exists() {
         // create the config directory and file
-        std::fs::create_dir_all(
+        fs::create_dir_all(
             config_path
                 .parent()
                 .ok_or(anyhow::anyhow!("Could not find parent directory"))?,
-        )?;
-        std::fs::write(
+        ).await?;
+        fs::write(
             &config_path,
             serde_json::to_string(&Preferences::default())?,
-        )?;
+        ).await?;
     }
-    let data = std::fs::read_to_string(config_path)?;
+    let data = fs::read_to_string(config_path).await?;
     let preferences: Preferences = serde_json::from_str(&data)?;
     Ok(preferences)
 }
