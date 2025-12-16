@@ -5,6 +5,7 @@
   <h3>
 The music player you didn't know you needed
 </h3>
+
 [![License](https://img.shields.io/github/license/infiniwave/vibrance)](https://github.com/infiniwave/vibrance/blob/main/LICENSE)
 
 </div>
