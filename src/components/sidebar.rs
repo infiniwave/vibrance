@@ -16,6 +16,7 @@ pub struct Sidebar {
 pub enum NavigationState {
     Home,
     Search,
+    Lyrics,
 }
 
 impl Sidebar {
@@ -49,6 +50,17 @@ impl Sidebar {
             *state = NavigationState::Search;
         });
     }
+
+    pub fn item_lyrics(
+        &mut self,
+        _event: &ClickEvent,
+        _window: &mut Window,
+        cx: &mut gpui::Context<'_, Self>,
+    ) {
+        self.navigation_state.update(cx, |state, _| {
+            *state = NavigationState::Lyrics;
+        });
+    }
 }
 
 impl Render for Sidebar {
@@ -57,24 +69,6 @@ impl Render for Sidebar {
         window: &mut gpui::Window,
         cx: &mut gpui::Context<'_, Self>,
     ) -> impl IntoElement {
-        // gpui::div()
-        //     .w_full()
-        //     .h_full()
-        //     .max_w_64()
-        //     .border(AbsoluteLength::Pixels(1_f32.into()))
-        //     .border_color(rgb(0))
-        //     .v_flex()
-        //     .px_2()
-        //     .py_4()
-        //     .gap_2()
-        //     .child(div().child("Vibrance").text_xl().font_bold().text_center())
-        //     .child(div()
-        //         .v_flex()
-        //         .gap_1()
-        //         .child(Button::new("load_single").primary().label("Load media"))
-        //         .child(Button::new("load").primary().label("Load media directory"))
-        //     )
-        //     .child(div().v_flex())
         GpuiSidebar::new(Side::Left)
             .bg(rgba(0x0000007a))
             .collapsible(true)
@@ -115,6 +109,15 @@ impl Render for Sidebar {
                             .active(matches!(
                                 self.navigation_state.read(cx),
                                 NavigationState::Search
+                            )),
+                    )
+                    .child(
+                        SidebarMenuItem::new("Lyrics")
+                            .icon(Icon::Play)
+                            .on_click(cx.listener(Self::item_lyrics))
+                            .active(matches!(
+                                self.navigation_state.read(cx),
+                                NavigationState::Lyrics
                             )),
                     ),
             )

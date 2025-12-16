@@ -32,6 +32,7 @@ pub struct App {
     sidebar: Entity<components::sidebar::Sidebar>,
     home_view: Entity<views::HomeView>,
     search_view: Entity<views::SearchView>,
+    lyrics_view: Entity<views::LyricsView>,
 }
 
 impl App {
@@ -42,11 +43,13 @@ impl App {
         let home_view = cx.new(|cx| views::HomeView::new(window, cx));
         let player_for_search = player.clone();
         let search_view = cx.new(|cx| views::SearchView::new(window, cx, player_for_search));
+        let lyrics_view = cx.new(|cx| views::LyricsView::new(window, cx));
         Self {
             player,
             sidebar,
             home_view,
             search_view,
+            lyrics_view,
         }
     }
 }
@@ -57,6 +60,7 @@ impl Render for App {
         let render = match navitem {
             NavigationState::Home => self.home_view.clone().into_any_element(),
             NavigationState::Search => self.search_view.clone().into_any_element(),
+            NavigationState::Lyrics => self.lyrics_view.clone().into_any_element(),
         };
         div()
             .font(font("DM Sans"))
