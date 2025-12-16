@@ -6,6 +6,7 @@ use gpui::{
     AppContext, Context, Entity, ImageSource, IntoElement, ParentElement, Render, Styled, Timer,
     div, img,
 };
+use gpui_component::popover::Popover;
 use gpui_component::{
     StyledExt,
     button::Button,
@@ -27,12 +28,13 @@ pub struct Player {
     is_seeking: bool,
     cmd_sender: Option<UnboundedSender<PlayerCommand>>,
     paused: bool,
+    volume_state: Entity<SliderState>,
 }
 
 impl Player {
     pub fn new(cx: &mut Context<Self>) -> Self {
         let playback_state = cx.new(|_| SliderState::new().min(0.0).max(100.0).step(0.1));
-
+        let volume_state = cx.new(|_| SliderState::new().min(0.0).max(100.0).step(1.0));
         cx.subscribe(
             &playback_state,
             |this: &mut Self, _, event: &SliderEvent, cx| {
@@ -50,6 +52,21 @@ impl Player {
                     this.is_seeking = false;
                     cx.notify();
                 }
+            },
+        )
+        .detach();
+
+        cx.subscribe(
+            &volume_state,
+            |this: &mut Self, _, event: &SliderEvent, cx| {
+                let SliderEvent::Change(value) = event;
+                let position = value.end() / 100.0; // convert from 0-100 to 0-1
+                if let Some(player_mutex) = PLAYER.get() {
+                    if let Ok(mut player) = player_mutex.try_lock() {
+                        player.set_volume(position);
+                    }
+                }
+                cx.notify();
             },
         )
         .detach();
@@ -106,7 +123,6 @@ impl Player {
                                         PlayerEvent::Resumed => {
                                             player_component.paused = false;
                                         }
-                                        _ => {}
                                     },
                                 );
                             }
@@ -135,6 +151,7 @@ impl Player {
             is_seeking: false,
             cmd_sender: None,
             paused: false,
+            volume_state,
         }
     }
 
@@ -260,7 +277,15 @@ impl Render for Player {
                                 ),
                         )
                         .child(div()
-                                .col_span(1)),
+                                .col_span(1)
+                                .h_flex()
+                                .justify_end()
+                            .child(Popover::new("volume_popover").trigger(Button::new("volume").icon(Icon::Speaker2)).child(
+                                div()
+                                    .py_2()
+                                    .child(Slider::new(&self.volume_state).vertical().h_24()))
+                            ),
+                        )
                 ),
         )
     }

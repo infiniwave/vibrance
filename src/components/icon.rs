@@ -11,6 +11,7 @@ pub enum Icon {
     FolderList,
     FolderOpen,
     Navigation,
+    Speaker2,
 }
 
 impl IconNamed for Icon {
@@ -26,6 +27,7 @@ impl IconNamed for Icon {
             Icon::FolderList => "svg/folder_list.svg",
             Icon::FolderOpen => "svg/folder_open.svg",
             Icon::Navigation => "svg/navigation.svg",
+            Icon::Speaker2 => "svg/speaker_2.svg",
         }
         .into()
     }
