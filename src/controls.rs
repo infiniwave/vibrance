@@ -1,10 +1,11 @@
 use std::ffi::c_void;
 
 use anyhow::Result;
+use gpui::Window;
 use souvlaki::{MediaControlEvent, MediaControls, PlatformConfig};
 
-pub fn initialize() -> Result<MediaControls> {
-    let hwnd = try_get_hwnd()?;
+pub fn initialize(window: &mut Window) -> Result<MediaControls> {
+    let hwnd = try_get_hwnd(window)?;
     let mut controls = MediaControls::new(PlatformConfig {
         dbus_name: "vibrance",
         display_name: "Vibrance",
@@ -30,18 +31,23 @@ pub fn initialize() -> Result<MediaControls> {
     Ok(controls)
 }
 
-pub fn try_get_hwnd() -> Result<Option<*mut c_void>> {
+pub fn try_get_hwnd(window: &mut Window) -> Result<Option<*mut c_void>> {
     #[cfg(not(target_os = "windows"))]
     return Ok(None);
 
     #[cfg(target_os = "windows")]
-    return unsafe {
-        let hwnd = get_mainwindow_hwnd();
-        println!("HWND: {:?}", hwnd);
-        if hwnd.is_null() {
-            Err(anyhow::anyhow!("Failed to get main window handle"))
+    return {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        let handle = window.window_handle();
+        if let Ok(hwnd) = handle {
+            let handle = hwnd.as_raw();
+            let RawWindowHandle::Win32(handle) = handle else {
+                return Err(anyhow::anyhow!("Failed to get Win32 window handle"));
+            };
+            println!("Handle: {:?}", handle);
+            Ok(Some(handle.hwnd.get() as *mut c_void))
         } else {
-            Ok(Some(hwnd))
+            Err(anyhow::anyhow!("Failed to get main window handle"))
         }
     };
 }

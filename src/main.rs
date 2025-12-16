@@ -197,14 +197,6 @@ async fn main() {
     let player = Mutex::new(player);
     PLAYER.set(player).expect("Failed to initialize player");
     println!("Player initialized successfully.");
-    if preferences.use_system_audio_controls {
-        let controls = controls::initialize().expect("Failed to initialize media controls");
-        let controls_mutex = Mutex::new(controls);
-        CONTROLS
-            .set(controls_mutex)
-            .expect("Failed to initialize media controls");
-        println!("Media controls initialized successfully.");
-    }
     let resources = Resources;
     let dm_sans = resources
         .load("fonts/dm-sans-variable.ttf")
@@ -257,6 +249,14 @@ async fn main() {
 
         cx.open_window(WindowOptions::default(), |window, cx| {
             let view = cx.new(|cx| App::new(window, cx));
+            if preferences.use_system_audio_controls {
+                let controls = controls::initialize(window).expect("Failed to initialize media controls");
+                let controls_mutex = Mutex::new(controls);
+                CONTROLS
+                    .set(controls_mutex)
+                    .expect("Failed to initialize media controls");
+                println!("Media controls initialized successfully.");
+            }
             // This first level on the window, should be a Root.
             cx.new(|cx| Root::new(view, window, cx))
         })
