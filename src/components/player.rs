@@ -201,11 +201,12 @@ impl Render for Player {
                 )
                 .child(
                     gpui::div()
-                        .h_flex()
                         .w_full()
-                        .justify_between()
+                        .grid()
+                        .grid_cols(3)
                         .child(
                             div()
+                                .col_span(1)
                                 .h_flex()
                                 .gap_4()
                                 .child(
@@ -233,7 +234,9 @@ impl Render for Player {
                         )
                         .child(
                             div()
+                                .col_span(1)
                                 .h_flex()
+                                .justify_center()
                                 .gap_4()
                                 .child(
                                     Button::new("previous")
@@ -256,7 +259,8 @@ impl Render for Player {
                                         .on_click(cx.listener(|t, _, _, _| {})),
                                 ),
                         )
-                        .child(div()),
+                        .child(div()
+                                .col_span(1)),
                 ),
         )
     }
