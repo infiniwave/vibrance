@@ -32,6 +32,14 @@ pub struct Player {
     pub queue: Vec<Track>,
     pub in_cmd: UnboundedSender<PlayerCommand>,
     pub in_evt: Sender<PlayerEvent>,
+    pub repeat_mode: Repeat,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Repeat {
+    Off,
+    All,
+    One,
 }
 
 pub enum PlayerCommand {
@@ -216,6 +224,7 @@ impl Player {
             queue: Vec::new(),
             in_cmd,
             in_evt,
+            repeat_mode: Repeat::Off,
         }
     }
 
@@ -228,15 +237,15 @@ impl Player {
             println!("No tracks in the queue to play.");
             return;
         }
-        if self.current_track.is_none() {
-            self.current_track = Some(self.queue.remove(0));
-        } else {
+        if let Some(current) = &self.current_track {
             self.in_cmd.send(PlayerCommand::Stop).unwrap_or_else(|e| {
                 panic!("Failed to send stop command: {}", e);
             });
-            // .expect("Failed to send stop command");
-            self.current_track = Some(self.queue.remove(0));
+            if self.repeat_mode == Repeat::All {
+                self.queue.push(current.clone());
+            }
         }
+        self.current_track = Some(self.queue.remove(0));
         if let Some(track) = &self.current_track {
             let cmd = PlayerCommand::Play(track.clone());
             self.in_cmd.send(cmd).expect("Failed to send play command");

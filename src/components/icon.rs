@@ -12,6 +12,9 @@ pub enum Icon {
     FolderOpen,
     Navigation,
     Speaker2,
+    ArrowRepeatOne,
+    ArrowRepeatAll,
+    ArrowRepeatOff,
 }
 
 impl IconNamed for Icon {
@@ -28,6 +31,9 @@ impl IconNamed for Icon {
             Icon::FolderOpen => "svg/folder_open.svg",
             Icon::Navigation => "svg/navigation.svg",
             Icon::Speaker2 => "svg/speaker_2.svg",
+            Icon::ArrowRepeatOne => "svg/arrow_repeat_one.svg",
+            Icon::ArrowRepeatAll => "svg/arrow_repeat_all.svg",
+            Icon::ArrowRepeatOff => "svg/arrow_repeat_off.svg",
         }
         .into()
     }
