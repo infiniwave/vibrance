@@ -67,8 +67,37 @@ impl Player {
             let mut global_volume = volume;
             sink.set_volume(global_volume);
             let mut last_progress_updated: i64 = 0;
+            let mut pending_volume_save: Option<f32> = None;
+            let mut last_volume_change: i64 = 0;
             loop {
-                if let Ok(cmd) = out_cmd.try_recv() {
+                // drain all pending commands
+                let mut commands = Vec::new();
+                while let Ok(cmd) = out_cmd.try_recv() {
+                    commands.push(cmd);
+                }
+                // keep latest of each to reduce lag
+                let mut latest_volume: Option<f32> = None;
+                let mut latest_seek: Option<f32> = None;
+                let mut latest_muted: Option<bool> = None;
+                let mut filtered_commands = Vec::new();
+                for cmd in commands {
+                    match cmd {
+                        PlayerCommand::SetVolume(v) => latest_volume = Some(v),
+                        PlayerCommand::Seek(s) => latest_seek = Some(s),
+                        PlayerCommand::SetMuted(m) => latest_muted = Some(m),
+                        other => filtered_commands.push(other),
+                    }
+                }
+                if let Some(v) = latest_volume {
+                    filtered_commands.push(PlayerCommand::SetVolume(v));
+                }
+                if let Some(s) = latest_seek {
+                    filtered_commands.push(PlayerCommand::Seek(s));
+                }
+                if let Some(m) = latest_muted {
+                    filtered_commands.push(PlayerCommand::SetMuted(m));
+                }
+                for cmd in filtered_commands {
                     match cmd {
                         PlayerCommand::Play(track) => {
                             in_evt_clone
@@ -136,13 +165,8 @@ impl Player {
                         PlayerCommand::SetVolume(volume) => {
                             sink.set_volume(volume);
                             global_volume = volume;
-                            let mut preferences = PREFERENCES
-                                .get()
-                                .expect("Preferences not initialized")
-                                .write()
-                                .await;
-                            preferences.volume = volume;
-                            drop(preferences);
+                            pending_volume_save = Some(volume);
+                            last_volume_change = Utc::now().timestamp_millis();
                         }
                         PlayerCommand::SetMuted(muted) => {
                             if muted {
@@ -151,6 +175,19 @@ impl Player {
                                 sink.set_volume(global_volume); // Default volume, adjust as needed
                             }
                         }
+                    }
+                }
+                // debounce saving volume
+                if let Some(volume) = pending_volume_save {
+                    if Utc::now().timestamp_millis() - last_volume_change >= 300 {
+                        let mut preferences = PREFERENCES
+                            .get()
+                            .expect("Preferences not initialized")
+                            .write()
+                            .await;
+                        preferences.volume = volume;
+                        drop(preferences);
+                        pending_volume_save = None;
                     }
                 }
                 if sink.empty() && current_duration > 0.0 {
@@ -171,7 +208,7 @@ impl Player {
                         .unwrap();
                     last_progress_updated = Utc::now().timestamp_millis();
                 }
-                time::sleep(std::time::Duration::from_millis(100)).await;
+                time::sleep(std::time::Duration::from_millis(200)).await;
             }
         });
         Player {
