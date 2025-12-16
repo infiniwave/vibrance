@@ -26,7 +26,8 @@ impl IconNamed for Icon {
             Icon::FolderList => "svg/folder_list.svg",
             Icon::FolderOpen => "svg/folder_open.svg",
             Icon::Navigation => "svg/navigation.svg",
-        }.into()
+        }
+        .into()
     }
 }
 

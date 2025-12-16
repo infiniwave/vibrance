@@ -3,7 +3,7 @@ use base64::{Engine, prelude::BASE64_STANDARD};
 use lrc::Lyrics;
 use reqwest::Url;
 
-use crate::lyrics::{CLIENT, LyricLine, LyricSource, get_client};
+use crate::lyrics::{LyricLine, LyricSource, get_client};
 
 pub struct QQProvider;
 impl LyricSource for QQProvider {

@@ -1,4 +1,4 @@
-pub mod search;
 pub mod home;
-pub use search::SearchView;
+pub mod search;
 pub use home::HomeView;
+pub use search::SearchView;

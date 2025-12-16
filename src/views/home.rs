@@ -6,7 +6,7 @@ use tokio::task;
 
 use crate::{
     components::track_list::{TrackList, TrackListDelegate},
-    player::{Track, PLAYER},
+    player::{PLAYER, Track},
     preferences::PREFERENCES,
     providers,
 };

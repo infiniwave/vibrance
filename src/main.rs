@@ -1,23 +1,31 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-pub mod preferences;
-pub mod player;
-pub mod providers;
-pub mod lyrics;
 pub mod components;
-pub mod views;
 pub mod controls;
+pub mod lyrics;
+pub mod player;
+pub mod preferences;
+pub mod providers;
 pub mod resources;
+pub mod views;
 
-use std::{borrow::Cow, path::{Component, PathBuf}, time::Duration};
+use std::{path::PathBuf, time::Duration};
 
 use gpui::*;
-use gpui_component::{button::*, *};
+use gpui_component::*;
 use gpui_component_assets::Assets;
 use once_cell::sync::OnceCell;
 use souvlaki::{MediaControls, MediaMetadata, MediaPlayback};
-use tokio::{sync::{Mutex, RwLock}, task, time};
+use tokio::{
+    sync::{Mutex, RwLock},
+    task, time,
+};
 
-use crate::{components::sidebar::NavigationState, player::{PLAYER, Player, PlayerEvent}, preferences::{PREFERENCES, read_preferences}, providers::youtube, resources::Resources};
+use crate::{
+    components::sidebar::NavigationState,
+    player::{PLAYER, Player, PlayerEvent},
+    preferences::{PREFERENCES, read_preferences},
+    resources::Resources,
+};
 
 pub struct App {
     player: Entity<components::player::Player>,
@@ -29,7 +37,7 @@ pub struct App {
 impl App {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let player = cx.new(|cx| components::player::Player::new(cx));
-        
+
         let sidebar = cx.new(|cx| components::sidebar::Sidebar::new(cx));
         let home_view = cx.new(|cx| views::HomeView::new(window, cx));
         let player_for_search = player.clone();
@@ -47,26 +55,28 @@ impl Render for App {
         let sidebar = self.sidebar.read(cx);
         let navitem = sidebar.navigation_state.read(cx);
         let render = match navitem {
-            NavigationState::Home => {
-                self.home_view.clone().into_any_element()
-            }
-            NavigationState::Search => {
-                self.search_view.clone().into_any_element()
-            }
+            NavigationState::Home => self.home_view.clone().into_any_element(),
+            NavigationState::Search => self.search_view.clone().into_any_element(),
         };
         div()
             .font(font("DM Sans"))
-            .bg(linear_gradient(135.0, linear_color_stop(rgb(0x1D0034), 0.0), linear_color_stop(rgb(0x31001D), 1.0)))
+            .bg(linear_gradient(
+                135.0,
+                linear_color_stop(rgb(0x1D0034), 0.0),
+                linear_color_stop(rgb(0x31001D), 1.0),
+            ))
             .text_color(rgb(16777215))
             .v_flex()
             .size_full()
             .items_center()
             .justify_center()
-            .child(div()
-                .h_flex()
-                .size_full()
-            .child(self.sidebar.clone())
-            .child(render))
+            .child(
+                div()
+                    .h_flex()
+                    .size_full()
+                    .child(self.sidebar.clone())
+                    .child(render),
+            )
             .child(self.player.clone())
     }
 }
@@ -79,7 +89,9 @@ static CONTROLS: OnceCell<Mutex<MediaControls>> = OnceCell::new();
 #[tokio::main]
 async fn main() {
     // Read data from configuration
-    let preferences = read_preferences().await.expect("Failed to read preferences");
+    let preferences = read_preferences()
+        .await
+        .expect("Failed to read preferences");
     PREFERENCES
         .set(RwLock::new(preferences.clone()))
         .expect("Failed to set preferences");
@@ -125,11 +137,7 @@ async fn main() {
                 }
                 PlayerEvent::End => {
                     println!("Playback ended");
-                    let mut player = PLAYER
-                        .get()
-                        .expect("Player not initialized")
-                        .lock()
-                        .await;
+                    let mut player = PLAYER.get().expect("Player not initialized").lock().await;
                     player.current_track = None;
                     player.play();
                     drop(player);
@@ -198,28 +206,34 @@ async fn main() {
         println!("Media controls initialized successfully.");
     }
     let resources = Resources;
-    let dm_sans = resources.load("fonts/dm-sans-variable.ttf").expect("Missing font").expect("Missing font");
-    let dm_sans_italic = resources.load("fonts/dm-sans-italic-variable.ttf").expect("Missing font").expect("Missing font");
-    let app = Application::new().with_assets(Assets).with_assets(resources);
-    app.text_system().add_fonts(vec![ dm_sans, dm_sans_italic ]).expect("Failed to load fonts");
+    let dm_sans = resources
+        .load("fonts/dm-sans-variable.ttf")
+        .expect("Missing font")
+        .expect("Missing font");
+    let dm_sans_italic = resources
+        .load("fonts/dm-sans-italic-variable.ttf")
+        .expect("Missing font")
+        .expect("Missing font");
+    let app = Application::new()
+        .with_assets(Assets)
+        .with_assets(resources);
+    app.text_system()
+        .add_fonts(vec![dm_sans, dm_sans_italic])
+        .expect("Failed to load fonts");
 
     app.run(move |cx| {
         // This must be called before using any GPUI Component features.
-        gpui_component::init(cx);    
+        gpui_component::init(cx);
         let theme_name = SharedString::from("Tokyo Night"); // TODO: theme preferences
         if let Err(err) = ThemeRegistry::watch_dir(PathBuf::from("./themes"), cx, move |cx| {
-            if let Some(theme) = ThemeRegistry::global(cx)
-                .themes()
-                .get(&theme_name)
-                .cloned()
-            {
+            if let Some(theme) = ThemeRegistry::global(cx).themes().get(&theme_name).cloned() {
                 Theme::global_mut(cx).apply_config(&theme);
             }
         }) {
             println!("Failed to watch themes directory: {}", err);
         }
 
-        cx.on_window_closed(move|cx| {
+        cx.on_window_closed(move |cx| {
             if cx.windows().is_empty() {
                 task::block_in_place(|| {
                     let rt = tokio::runtime::Handle::current();
@@ -238,12 +252,14 @@ async fn main() {
                 println!("Bye");
                 std::process::exit(0);
             }
-        }).detach();
+        })
+        .detach();
 
         cx.open_window(WindowOptions::default(), |window, cx| {
             let view = cx.new(|cx| App::new(window, cx));
             // This first level on the window, should be a Root.
             cx.new(|cx| Root::new(view, window, cx))
-        }).ok();
+        })
+        .ok();
     });
 }

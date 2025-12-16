@@ -1,9 +1,8 @@
 use std::borrow::Cow;
 
+use anyhow::{Result, anyhow};
 use gpui::{AssetSource, SharedString};
-use anyhow::{anyhow, Result};
 use rust_embed::RustEmbed;
-
 
 #[derive(RustEmbed)]
 #[folder = "resources"]

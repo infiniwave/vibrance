@@ -1,14 +1,28 @@
 use std::{io::SeekFrom, sync::Arc};
 
 use anyhow::Result;
-use base64::{prelude::BASE64_STANDARD, Engine};
-use futures::{future::{join_all, try_join_all}, lock::Mutex};
+use base64::{Engine, prelude::BASE64_STANDARD};
+use futures::{
+    future::{join_all, try_join_all},
+    lock::Mutex,
+};
 use once_cell::sync::OnceCell;
-use rustypipe::{client::RustyPipe, model::{AudioFormat, TrackItem}, param::StreamFilter};
-use tokio::{fs::File, io::{AsyncSeekExt, AsyncWriteExt}};
+use rustypipe::{
+    client::RustyPipe,
+    model::{AudioFormat, TrackItem},
+    param::StreamFilter,
+};
+use tokio::{
+    fs::File,
+    io::{AsyncSeekExt, AsyncWriteExt},
+};
 use ulid::Ulid;
 
-use crate::{lyrics::{self, CLIENT}, player::Track, preferences::PREFERENCES};
+use crate::{
+    lyrics::{self},
+    player::Track,
+    preferences::PREFERENCES,
+};
 
 pub static YT_CLIENT: OnceCell<RustyPipe> = OnceCell::new();
 
@@ -23,7 +37,7 @@ pub struct YtTrack {
     pub artist: String,
     pub album: String,
     pub album_art: Option<String>, // URL to album art, if available
-    pub duration: u32, // in seconds
+    pub duration: u32,             // in seconds
 }
 
 pub async fn search_tracks(query: &str) -> Result<Vec<YtTrack>> {
@@ -41,26 +55,31 @@ pub async fn search_tracks(query: &str) -> Result<Vec<YtTrack>> {
                     } else {
                         None
                     }
-                }.await
+                }
+                .await
             }
             None => None,
         };
         YtTrack {
             id: track.id,
             title: track.name,
-            artist: track.artists.iter().map(|a| a.name.clone()).collect::<Vec<_>>().join(", "),
-            album: track.album.as_ref().map_or("Unknown Album".to_string(), |a| a.name.clone()),
+            artist: track
+                .artists
+                .iter()
+                .map(|a| a.name.clone())
+                .collect::<Vec<_>>()
+                .join(", "),
+            album: track
+                .album
+                .as_ref()
+                .map_or("Unknown Album".to_string(), |a| a.name.clone()),
             album_art,
             duration: track.duration.unwrap(),
         }
     };
-    let tracks: Vec<_> = results.items.items
-        .into_iter()
-        .map(map_track)
-        .collect();
+    let tracks: Vec<_> = results.items.items.into_iter().map(map_track).collect();
     let tracks = join_all(tracks).await;
-    Ok(tracks)       
-
+    Ok(tracks)
 }
 
 pub async fn download_track(id: &str, output_path: &str) -> Result<()> {
@@ -76,9 +95,17 @@ pub async fn download_track(id: &str, output_path: &str) -> Result<()> {
     // youtube throttles each request to a woeful 30 KB/s
     let response = client.head(&audio.url).send().await?;
     if !response.status().is_success() {
-        return Err(anyhow::anyhow!("Failed to download track: {}", response.status()));
+        return Err(anyhow::anyhow!(
+            "Failed to download track: {}",
+            response.status()
+        ));
     }
-    let total_size = response.headers().get("Content-Length").ok_or(anyhow::anyhow!("Failed to get content length"))?.to_str()?.parse::<u64>()?;
+    let total_size = response
+        .headers()
+        .get("Content-Length")
+        .ok_or(anyhow::anyhow!("Failed to get content length"))?
+        .to_str()?
+        .parse::<u64>()?;
     println!("Total size: {} bytes", total_size);
     let file = Arc::new(Mutex::new(file));
     let mut futures = Vec::new();
@@ -90,9 +117,16 @@ pub async fn download_track(id: &str, output_path: &str) -> Result<()> {
         let url = audio.url.clone();
         futures.push(tokio::spawn(async move {
             let range_header = format!("bytes={}-{}", start, end - 1);
-            let response = client.get(&url).header("Range", range_header).send().await?;
+            let response = client
+                .get(&url)
+                .header("Range", range_header)
+                .send()
+                .await?;
             if !response.status().is_success() {
-                return Err(anyhow::anyhow!("Failed to download chunk: {}", response.status()));
+                return Err(anyhow::anyhow!(
+                    "Failed to download chunk: {}",
+                    response.status()
+                ));
             }
             println!("Downloading chunk: {}-{}", start, end - 1);
             let mut file = file_clone.lock().await;
@@ -104,7 +138,10 @@ pub async fn download_track(id: &str, output_path: &str) -> Result<()> {
         }));
         start += chunk_size as u64;
     }
-    try_join_all(futures).await?.into_iter().collect::<Result<Vec<_>, _>>()?;    
+    try_join_all(futures)
+        .await?
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
     println!("Track downloaded to {}", output_path);
     Ok(())
 }
@@ -128,10 +165,12 @@ pub async fn download_track_default(id: &str) -> Result<Track> {
     };
     let id = Ulid::new().to_string();
     let data = dirs::config_dir().ok_or(anyhow::anyhow!("Could not find config directory"))?;
-    let path = data.join("Vibrance").join("yt_tracks").join(format!("{}.m4a", id));
+    let path = data
+        .join("Vibrance")
+        .join("yt_tracks")
+        .join(format!("{}.m4a", id));
     std::fs::create_dir_all(
-        path
-            .parent()
+        path.parent()
             .ok_or(anyhow::anyhow!("Could not find parent directory"))?,
     )?;
     let path = path.to_str().unwrap().to_string();
@@ -146,7 +185,11 @@ pub async fn download_track_default(id: &str) -> Result<Track> {
         path: Some(path),
         yt_id: Some(track.track.id.clone()),
     };
-    let mut preferences = PREFERENCES.get().ok_or(anyhow::anyhow!("Preferences not initialized"))?.write().await;
+    let mut preferences = PREFERENCES
+        .get()
+        .ok_or(anyhow::anyhow!("Preferences not initialized"))?
+        .write()
+        .await;
     preferences.add_unorganized_track(track.clone());
     drop(preferences);
     Ok(track)

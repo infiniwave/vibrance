@@ -3,14 +3,18 @@ use std::sync::Arc;
 use base64::{Engine, prelude::BASE64_STANDARD};
 use gpui::{App, Image, ImageCacheError, ImageFormat, RenderImage, SharedString, Window};
 
+pub mod icon;
 pub mod player;
 pub mod sidebar;
+pub mod sidebar_item;
 pub mod track_list;
 pub mod track_list_item;
-pub mod sidebar_item;
-pub mod icon;
 
-pub fn render_image(w: &mut Window, a: &mut App, image: &String) -> Result<Arc<RenderImage>, ImageCacheError> {
+pub fn render_image(
+    w: &mut Window,
+    a: &mut App,
+    image: &String,
+) -> Result<Arc<RenderImage>, ImageCacheError> {
     let bytes = BASE64_STANDARD.decode(image).unwrap();
     // detect image format from magic bytes
     let format = if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
@@ -24,9 +28,11 @@ pub fn render_image(w: &mut Window, a: &mut App, image: &String) -> Result<Arc<R
     } else if bytes.starts_with(&[0x42, 0x4D]) {
         ImageFormat::Bmp
     } else {
-        // fallback to JPEG 
+        // fallback to JPEG
         ImageFormat::Jpeg
     };
     let img = Image::from_bytes(format, bytes);
-    Arc::new(img).get_render_image(w, a).ok_or(ImageCacheError::Asset(SharedString::new("")))
+    Arc::new(img)
+        .get_render_image(w, a)
+        .ok_or(ImageCacheError::Asset(SharedString::new("")))
 }

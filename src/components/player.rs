@@ -1,10 +1,17 @@
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::prelude::FluentBuilder;
-use gpui::{AbsoluteLength, AppContext, Context, Entity, Image, ImageCacheError, ImageFormat, ImageSource, IntoElement, ParentElement, Render, SharedString, Styled, Timer, div, img, px, rgb};
-use gpui_component::{StyledExt, button::Button, group_box::{GroupBox, GroupBoxVariants}, slider::{Slider, SliderEvent, SliderState}};
-use once_cell::sync::OnceCell;
+use gpui::{
+    AppContext, Context, Entity, ImageSource, IntoElement, ParentElement, Render, Styled, Timer,
+    div, img,
+};
+use gpui_component::{
+    StyledExt,
+    button::Button,
+    group_box::{GroupBox, GroupBoxVariants},
+    slider::{Slider, SliderEvent, SliderState},
+};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::components::icon::Icon;
@@ -24,26 +31,28 @@ pub struct Player {
 
 impl Player {
     pub fn new(cx: &mut Context<Self>) -> Self {
-        let playback_state = cx.new(|_| {
-            SliderState::new().min(0.0).max(100.0).step(0.1)
-        });
+        let playback_state = cx.new(|_| SliderState::new().min(0.0).max(100.0).step(0.1));
 
-        cx.subscribe(&playback_state, |this: &mut Self, _, event: &SliderEvent, cx| {
-            let SliderEvent::Change(value) = event;
-            // TODO: only seek if the user is done dragging (on mouse up)
-            if this.duration_secs > 0.0 && !this.is_seeking {
-                this.is_seeking = true;
-                let position = value.end() / 100.0; // convert from 0-100 to 0-1
-                if let Some(player_mutex) = PLAYER.get() {
-                    if let Ok(mut player) = player_mutex.try_lock() {
-                        player.seek(position);
+        cx.subscribe(
+            &playback_state,
+            |this: &mut Self, _, event: &SliderEvent, cx| {
+                let SliderEvent::Change(value) = event;
+                // TODO: only seek if the user is done dragging (on mouse up)
+                if this.duration_secs > 0.0 && !this.is_seeking {
+                    this.is_seeking = true;
+                    let position = value.end() / 100.0; // convert from 0-100 to 0-1
+                    if let Some(player_mutex) = PLAYER.get() {
+                        if let Ok(mut player) = player_mutex.try_lock() {
+                            player.seek(position);
+                        }
                     }
+                    this.playback_position_secs = position as f64 * this.duration_secs;
+                    this.is_seeking = false;
+                    cx.notify();
                 }
-                this.playback_position_secs = position as f64 * this.duration_secs;
-                this.is_seeking = false;
-                cx.notify();
-            }
-        }).detach();
+            },
+        )
+        .detach();
 
         cx.spawn(async move |this, cx| {
             // wait for player to be initialized and subscribe
@@ -51,9 +60,12 @@ impl Player {
                 if let Some(player_mutex) = PLAYER.get() {
                     if let Ok(player) = player_mutex.try_lock() {
                         if let Some(this_entity) = this.upgrade() {
-                            let _ = cx.update_entity(&this_entity, |player_component: &mut Player, cx| {
-                                player_component.cmd_sender = Some(player.in_cmd.clone());
-                            });
+                            let _ = cx.update_entity(
+                                &this_entity,
+                                |player_component: &mut Player, cx| {
+                                    player_component.cmd_sender = Some(player.in_cmd.clone());
+                                },
+                            );
                         }
                         break player.out_evt_receiver();
                     }
@@ -68,12 +80,15 @@ impl Player {
                     match receiver.try_recv() {
                         Ok(event) => {
                             if let Some(this_entity) = this.upgrade() {
-                                let _ = cx.update_entity(&this_entity, |player_component: &mut Player, cx| {
-                                    match event {
+                                let _ = cx.update_entity(
+                                    &this_entity,
+                                    |player_component: &mut Player, cx| match event {
                                         PlayerEvent::Progress(position) => {
                                             if !player_component.is_seeking {
-                                                player_component.playback_position = position as f32;
-                                                player_component.playback_position_secs = position * player_component.duration_secs;
+                                                player_component.playback_position =
+                                                    position as f32;
+                                                player_component.playback_position_secs =
+                                                    position * player_component.duration_secs;
                                                 cx.notify();
                                             }
                                         }
@@ -92,8 +107,8 @@ impl Player {
                                             player_component.paused = false;
                                         }
                                         _ => {}
-                                    }
-                                });
+                                    },
+                                );
                             }
                         }
                         Err(tokio::sync::broadcast::error::TryRecvError::Lagged(n)) => {
@@ -108,7 +123,8 @@ impl Player {
                     }
                 }
             }
-        }).detach();
+        })
+        .detach();
 
         Self {
             playback_position: 0.0,
@@ -138,17 +154,27 @@ impl Player {
 }
 
 impl Render for Player {
-    fn render(&mut self, window: &mut gpui::Window, cx: &mut gpui::Context<'_, Self>) -> impl IntoElement {
-        let title = self.current_track.as_ref()
+    fn render(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut gpui::Context<'_, Self>,
+    ) -> impl IntoElement {
+        let title = self
+            .current_track
+            .as_ref()
             .and_then(|t| t.title.clone())
             .unwrap_or_else(|| "No track playing".to_string());
-        let artist = self.current_track.as_ref()
+        let artist = self
+            .current_track
+            .as_ref()
             .map(|t| t.artists.join(", "))
             .unwrap_or_else(|| "".to_string());
-        let album_art = self.current_track.as_ref()
+        let album_art = self
+            .current_track
+            .as_ref()
             .and_then(|t| t.album_art.clone());
 
-        // format current position and duration 
+        // format current position and duration
         let current_time = Self::format_time(self.playback_position_secs);
         let total_time = Self::format_time(self.duration_secs);
 
@@ -159,46 +185,79 @@ impl Render for Player {
         });
         // TODO: center controls
         // TODO: volume controller
-        GroupBox::new().outline().child(div()
-            .w_full()
-            .v_flex()
-            .p_2()
-            .gap_4()
-            .child(div().gap_4().h_flex().child(current_time).child(Slider::new(&self.playback_state)).child(total_time))
-            .child(gpui::div()
-                .h_flex()
+        GroupBox::new().outline().child(
+            div()
                 .w_full()
-                .justify_between()
-                .child(div()
-                    .h_flex()
-                    .gap_4()
-                    .child(div().h_flex().child(img(ImageSource::Custom(Arc::new(move |w, a| {
-                        if let Some(ref album_art) = album_art {
-                            Some(render_image(w, a, album_art))
-                        } else {
-                            None
-                        }
-                    }))).rounded_md())
-                        .w_16()
-                        .h_16())
-                    .child(div()
-                        .v_flex()
-                        .child(div().child(title).text_lg())
-                        .child(div().child(artist))
-                    )
+                .v_flex()
+                .p_2()
+                .gap_4()
+                .child(
+                    div()
+                        .gap_4()
+                        .h_flex()
+                        .child(current_time)
+                        .child(Slider::new(&self.playback_state))
+                        .child(total_time),
                 )
-                .child(div().h_flex().gap_4()
-                    .child(Button::new("previous").icon(Icon::Previous).on_click(cx.listener(|t,e,w,c| {
-
-                    })))
-                    .child(Button::new("pause").when(self.paused, |s| s.icon(Icon::Play)).when(!self.paused,|s|s.icon(Icon::Pause)).on_click(cx.listener(|t,e,w,c| {
-                        t.cmd_sender.as_ref().map(|sender| {
-                            let _ = sender.send(PlayerCommand::Pause);
-                        });
-                    })))
-                    .child(Button::new("next").icon(Icon::Next).on_click(cx.listener(|t,e,w,c| {
-                        
-                    }))))
-                .child(div())))
+                .child(
+                    gpui::div()
+                        .h_flex()
+                        .w_full()
+                        .justify_between()
+                        .child(
+                            div()
+                                .h_flex()
+                                .gap_4()
+                                .child(
+                                    div()
+                                        .h_flex()
+                                        .child(
+                                            img(ImageSource::Custom(Arc::new(move |w, a| {
+                                                if let Some(ref album_art) = album_art {
+                                                    Some(render_image(w, a, album_art))
+                                                } else {
+                                                    None
+                                                }
+                                            })))
+                                            .rounded_md(),
+                                        )
+                                        .w_16()
+                                        .h_16(),
+                                )
+                                .child(
+                                    div()
+                                        .v_flex()
+                                        .child(div().child(title).text_lg())
+                                        .child(div().child(artist)),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .h_flex()
+                                .gap_4()
+                                .child(
+                                    Button::new("previous")
+                                        .icon(Icon::Previous)
+                                        .on_click(cx.listener(|t, _, _, _| {})),
+                                )
+                                .child(
+                                    Button::new("pause")
+                                        .when(self.paused, |s| s.icon(Icon::Play))
+                                        .when(!self.paused, |s| s.icon(Icon::Pause))
+                                        .on_click(cx.listener(|t, _, _, _| {
+                                            t.cmd_sender.as_ref().map(|sender| {
+                                                let _ = sender.send(PlayerCommand::Pause);
+                                            });
+                                        })),
+                                )
+                                .child(
+                                    Button::new("next")
+                                        .icon(Icon::Next)
+                                        .on_click(cx.listener(|t, _, _, _| {})),
+                                ),
+                        )
+                        .child(div()),
+                ),
+        )
     }
 }

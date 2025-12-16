@@ -1,10 +1,10 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use anyhow::Result;
 use once_cell::sync::OnceCell;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use tokio::{fs, sync::{Mutex, RwLock}};
+use tokio::{fs, sync::RwLock};
 
 use crate::player::Track;
 
@@ -37,7 +37,8 @@ impl Preferences {
             config_path
                 .parent()
                 .ok_or(anyhow::anyhow!("Could not find parent directory"))?,
-        ).await?;
+        )
+        .await?;
         fs::write(&config_path, serde_json::to_string(self)?).await?;
         Ok(())
     }
@@ -52,9 +53,10 @@ impl Preferences {
     }
     pub fn add_unorganized_track(&mut self, track: Track) {
         // check if the track already exists by file name
-        let existing_track = self.unorganized_tracks.iter().find(|(_, t)| {
-            t.path == track.path || t.yt_id == track.yt_id
-        });
+        let existing_track = self
+            .unorganized_tracks
+            .iter()
+            .find(|(_, t)| t.path == track.path || t.yt_id == track.yt_id);
         if let Some((_, existing_track)) = existing_track {
             // ignore if the track already exists
             return;
@@ -73,7 +75,8 @@ impl Preferences {
         track
     }
     pub fn find_track_by_yt_id(&self, yt_id: &str) -> Option<Track> {
-        let mut track = self.unorganized_tracks
+        let mut track = self
+            .unorganized_tracks
             .values()
             .find(|t| t.yt_id.as_deref() == Some(yt_id))
             .cloned();
@@ -112,11 +115,13 @@ pub async fn read_preferences() -> Result<Preferences> {
             config_path
                 .parent()
                 .ok_or(anyhow::anyhow!("Could not find parent directory"))?,
-        ).await?;
+        )
+        .await?;
         fs::write(
             &config_path,
             serde_json::to_string(&Preferences::default())?,
-        ).await?;
+        )
+        .await?;
     }
     let data = fs::read_to_string(config_path).await?;
     let preferences: Preferences = serde_json::from_str(&data)?;

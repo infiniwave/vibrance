@@ -1,8 +1,4 @@
-use std::{
-    fs::File,
-    path::PathBuf,
-    time::Duration,
-};
+use std::{fs::File, path::PathBuf, time::Duration};
 
 use anyhow::Result;
 use base64::{Engine, prelude::BASE64_STANDARD};
@@ -15,7 +11,14 @@ use lofty::{
 use once_cell::sync::OnceCell;
 use rodio::{Decoder, OutputStreamBuilder, Sink, Source};
 use serde::{Deserialize, Serialize};
-use tokio::{sync::{Mutex, broadcast::{Receiver, Sender, channel}, mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel}}, task, time};
+use tokio::{
+    sync::{
+        Mutex,
+        broadcast::{Receiver, Sender, channel},
+        mpsc::{UnboundedSender, unbounded_channel},
+    },
+    task, time,
+};
 use ulid::Ulid;
 
 use crate::preferences::PREFERENCES;
@@ -71,7 +74,8 @@ impl Player {
                             in_evt_clone
                                 .send(PlayerEvent::TrackLoaded(track.clone()))
                                 .unwrap_or_else(|_| {
-                                    println!("Failed to send track loaded event"); 0
+                                    println!("Failed to send track loaded event");
+                                    0
                                 });
                             let Some(path) = track.path else {
                                 println!("Track path is None, skipping playback");
@@ -91,11 +95,16 @@ impl Player {
                             sink.append(source);
                             sink.play();
                             in_evt_clone.send(PlayerEvent::Resumed).unwrap_or_else(|_| {
-                                println!("Failed to send unpause event"); 0
+                                println!("Failed to send unpause event");
+                                0
                             });
                         }
                         PlayerCommand::Seek(pos) => {
-                            println!("Seeking to position: {:?} of {}", Duration::from_secs_f32(pos * current_duration), current_duration);
+                            println!(
+                                "Seeking to position: {:?} of {}",
+                                Duration::from_secs_f32(pos * current_duration),
+                                current_duration
+                            );
                             sink.try_seek(Duration::from_secs_f32(pos * current_duration))
                                 .unwrap_or_else(|e| {
                                     println!("Failed to seek to position: {:?}", e);
@@ -109,14 +118,18 @@ impl Player {
                             if sink.is_paused() {
                                 sink.play();
                                 in_evt_clone.send(PlayerEvent::Resumed).unwrap_or_else(|_| {
-                                    println!("Failed to send unpause event"); 0
+                                    println!("Failed to send unpause event");
+                                    0
                                 });
                             } else {
                                 sink.pause();
                                 let position = sink.get_pos().as_secs_f32() / current_duration;
-                                in_evt_clone.send(PlayerEvent::Progress(position.into())).unwrap();
+                                in_evt_clone
+                                    .send(PlayerEvent::Progress(position.into()))
+                                    .unwrap();
                                 in_evt_clone.send(PlayerEvent::Paused).unwrap_or_else(|_| {
-                                    println!("Failed to send pause event"); 0
+                                    println!("Failed to send pause event");
+                                    0
                                 });
                             }
                         }
@@ -143,7 +156,8 @@ impl Player {
                 if sink.empty() && current_duration > 0.0 {
                     current_duration = 0.0;
                     in_evt_clone.send(PlayerEvent::End).unwrap_or_else(|_| {
-                        println!("Failed to send end event"); 0
+                        println!("Failed to send end event");
+                        0
                     });
                 } else if !sink.empty() && !sink.is_paused() {
                     if Utc::now().timestamp_millis() - last_progress_updated < 100 {
@@ -152,7 +166,9 @@ impl Player {
                     }
                     // Emit progress event based on current position
                     let position = sink.get_pos().as_secs_f32() / current_duration;
-                    in_evt_clone.send(PlayerEvent::Progress(position.into())).unwrap();
+                    in_evt_clone
+                        .send(PlayerEvent::Progress(position.into()))
+                        .unwrap();
                     last_progress_updated = Utc::now().timestamp_millis();
                 }
                 time::sleep(std::time::Duration::from_millis(100)).await;
@@ -289,5 +305,5 @@ pub struct Track {
     pub album_art: Option<String>, // base64 encoded image data
     pub duration: f64,
     pub path: Option<String>,
-    pub yt_id: Option<String>, 
+    pub yt_id: Option<String>,
 }
