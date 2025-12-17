@@ -21,13 +21,10 @@ pub struct LyricsView {
 impl LyricsView {
     pub fn new(_window: &mut gpui::Window, cx: &mut gpui::Context<Self>) -> Self {
         cx.spawn(async move |this, cx| {
-            let receiver = loop {
-                if let Some(player_mutex) = PLAYER.get() {
-                    let player = player_mutex.lock().await;
-                    break player.out_evt_receiver();
-                }
-                Timer::after(Duration::from_millis(100)).await;
-            };
+            let receiver = PLAYER
+                .get()
+                .expect("Player not initialized")
+                .out_evt_receiver();
 
             let mut receiver = receiver;
             loop {

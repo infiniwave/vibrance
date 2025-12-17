@@ -38,8 +38,7 @@ impl HomeView {
                     track_clone
                 };
 
-                if let Some(player_mutex) = PLAYER.get() {
-                    let mut player = player_mutex.lock().await;
+                if let Some(player) = PLAYER.get() {
                     println!("Playing track: {:?}", track.title);
                     player.add_track(track);
                     player.play();

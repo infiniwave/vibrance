@@ -43,10 +43,8 @@ impl Player {
                 if this.duration_secs > 0.0 && !this.is_seeking {
                     this.is_seeking = true;
                     let position = value.end() / 100.0; // convert from 0-100 to 0-1
-                    if let Some(player_mutex) = PLAYER.get() {
-                        if let Ok(mut player) = player_mutex.try_lock() {
-                            player.seek(position);
-                        }
+                    if let Some(player) = PLAYER.get() {
+                        player.seek(position);
                     }
                     this.playback_position_secs = position as f64 * this.duration_secs;
                     this.is_seeking = false;
@@ -61,10 +59,8 @@ impl Player {
             |this: &mut Self, _, event: &SliderEvent, cx| {
                 let SliderEvent::Change(value) = event;
                 let position = value.end() / 100.0; // convert from 0-100 to 0-1
-                if let Some(player_mutex) = PLAYER.get() {
-                    if let Ok(mut player) = player_mutex.try_lock() {
-                        player.set_volume(position);
-                    }
+                if let Some(player) = PLAYER.get() {
+                    player.set_volume(position);
                 }
                 cx.notify();
             },
@@ -73,22 +69,18 @@ impl Player {
 
         cx.spawn(async move |this, cx| {
             // wait for player to be initialized and subscribe
-            let mut receiver = loop {
-                if let Some(player_mutex) = PLAYER.get() {
-                    if let Ok(player) = player_mutex.try_lock() {
-                        if let Some(this_entity) = this.upgrade() {
-                            let _ = cx.update_entity(
-                                &this_entity,
-                                |player_component: &mut Player, cx| {
-                                    player_component.cmd_sender = Some(player.in_cmd.clone());
-                                },
-                            );
-                        }
-                        break player.out_evt_receiver();
-                    }
-                }
-                Timer::after(Duration::from_millis(100)).await;
-            };
+            let player = PLAYER
+                .get()
+                .expect("Player not initialized");
+            let mut receiver = player.out_evt_receiver();
+            if let Some(this_entity) = this.upgrade() {
+                let _ = cx.update_entity(
+                    &this_entity,
+                    |player_component: &mut Player, cx| {
+                        player_component.cmd_sender = Some(player.in_cmd.clone());
+                    },
+                );
+            }
 
             // need to loop twice. inner loop to drain all messages
             loop {
@@ -280,6 +272,8 @@ impl Render for Player {
                                 .col_span(1)
                                 .h_flex()
                                 .justify_end()
+                            // .child(Button::new("repeat").when(Repeat::Off, |s| s.icon(Icon::ArrowRepeatOff)).when(Repeat::All, |s| s.icon(Icon::ArrowRepeatAll)).when(Repeat::One, |s| s.icon(Icon::ArrowRepeatOne)).on_click(cx.listener(|t, _, _, _| {
+                            // })))
                             .child(Popover::new("volume_popover").trigger(Button::new("volume").icon(Icon::Speaker2)).child(
                                 div()
                                     .py_2()

@@ -139,13 +139,7 @@ async fn main() {
                     // TODO: Update media controls progress
                     println!("Progress: {}", progress_value);
                 }
-                PlayerEvent::End => {
-                    println!("Playback ended");
-                    let mut player = PLAYER.get().expect("Player not initialized").lock().await;
-                    player.current_track = None;
-                    player.play();
-                    drop(player);
-                }
+                PlayerEvent::End => {}
                 PlayerEvent::TrackLoaded(track) => {
                     let mut controls = CONTROLS
                         .get()
@@ -198,7 +192,6 @@ async fn main() {
             }
         }
     });
-    let player = Mutex::new(player);
     PLAYER.set(player).expect("Failed to initialize player");
     println!("Player initialized successfully.");
     let resources = Resources;

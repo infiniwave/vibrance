@@ -13,7 +13,6 @@ use rodio::{Decoder, OutputStreamBuilder, Sink, Source};
 use serde::{Deserialize, Serialize};
 use tokio::{
     sync::{
-        Mutex,
         broadcast::{Receiver, Sender, channel},
         mpsc::{UnboundedSender, unbounded_channel},
     },
@@ -24,15 +23,12 @@ use ulid::Ulid;
 use crate::preferences::PREFERENCES;
 
 /// Global player instance
-pub static PLAYER: OnceCell<Mutex<Player>> = OnceCell::new();
+pub static PLAYER: OnceCell<Player> = OnceCell::new();
 
 #[derive(Debug, Clone)]
 pub struct Player {
-    pub current_track: Option<Track>,
-    pub queue: Vec<Track>,
     pub in_cmd: UnboundedSender<PlayerCommand>,
     pub in_evt: Sender<PlayerEvent>,
-    pub repeat_mode: Repeat,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -43,7 +39,11 @@ pub enum Repeat {
 }
 
 pub enum PlayerCommand {
-    Play(Track),
+    AddTrack(Track),
+    RemoveTrack(usize),
+    ClearQueue,
+    SetRepeat(Repeat),
+    Play,
     Pause,
     Stop,
     Seek(f32),
@@ -77,6 +77,9 @@ impl Player {
             let mut last_progress_updated: i64 = 0;
             let mut pending_volume_save: Option<f32> = None;
             let mut last_volume_change: i64 = 0;
+            let mut current_track: Option<Track> = None;
+            let mut queue: Vec<Track> = Vec::new();
+            let mut repeat_mode = Repeat::Off;
             loop {
                 // drain all pending commands
                 let mut commands = Vec::new();
@@ -107,36 +110,74 @@ impl Player {
                 }
                 for cmd in filtered_commands {
                     match cmd {
-                        PlayerCommand::Play(track) => {
-                            in_evt_clone
-                                .send(PlayerEvent::TrackLoaded(track.clone()))
-                                .unwrap_or_else(|_| {
-                                    println!("Failed to send track loaded event");
-                                    0
-                                });
-                            let Some(path) = track.path else {
-                                println!("Track path is None, skipping playback");
-                                continue;
-                            };
-                            if !PathBuf::from(&path).exists() {
-                                println!("Track file does not exist: {}", path);
+                        PlayerCommand::SetRepeat(mode) => {
+                            repeat_mode = mode;
+                        }
+                        PlayerCommand::AddTrack(track) => {
+                            queue.push(track);
+                        }
+                        PlayerCommand::RemoveTrack(index) => {
+                            if index < queue.len() {
+                                queue.remove(index);
+                            }
+                        }
+                        PlayerCommand::ClearQueue => {
+                            queue.clear();
+                            current_track = None;
+                            sink.clear();
+                            current_duration = 0.0;
+                        }
+                        PlayerCommand::Play => {
+                            if queue.is_empty() {
+                                println!("No tracks in the queue to play.");
                                 continue;
                             }
-                            let file = File::open(&path).unwrap();
-                            let source = Decoder::try_from(file).unwrap();
-                            current_duration = source
-                                .total_duration()
-                                .map(|d| d.as_secs_f32())
-                                .unwrap_or(0.0);
-                            println!("Playing track: {}", current_duration);
-                            sink.append(source);
-                            sink.play();
-                            in_evt_clone.send(PlayerEvent::Resumed).unwrap_or_else(|_| {
-                                println!("Failed to send unpause event");
-                                0
-                            });
+                            if let Some(current) = &current_track {
+                                sink.clear();
+                                current_duration = 0.0;
+                                if repeat_mode == Repeat::All {
+                                    queue.push(current.clone());
+                                }
+                            }
+                            current_track = Some(queue.remove(0));
+                            if let Some(track) = current_track.clone() {
+                                in_evt_clone
+                                    .send(PlayerEvent::TrackLoaded(track.clone()))
+                                    .unwrap_or_else(|_| {
+                                        println!("Failed to send track loaded event");
+                                        0
+                                    });
+                                let Some(path) = &track.path else {
+                                    println!("Track path is None, skipping playback");
+                                    continue;
+                                };
+                                if !PathBuf::from(&path).exists() {
+                                    println!("Track file does not exist: {}", path);
+                                    continue;
+                                }
+                                let file = File::open(&path).unwrap();
+                                let source = Decoder::try_from(file).unwrap();
+                                current_duration = source
+                                    .total_duration()
+                                    .map(|d| d.as_secs_f32())
+                                    .unwrap_or(0.0);
+                                println!("Playing track: {}", current_duration);
+                                sink.append(source);
+                                sink.play();
+                                in_evt_clone.send(PlayerEvent::Resumed).unwrap_or_else(|_| {
+                                    println!("Failed to send unpause event");
+                                    0
+                                });
+                                println!("Playing track: {:?}", track);
+                            } else {
+                                println!("No track is currently set to play.");
+                            }
                         }
                         PlayerCommand::Seek(pos) => {
+                            if current_track.is_none() {
+                                println!("No track is currently set to seek.");
+                                continue;
+                            }
                             println!(
                                 "Seeking to position: {:?} of {}",
                                 Duration::from_secs_f32(pos * current_duration),
@@ -204,6 +245,52 @@ impl Player {
                         println!("Failed to send end event");
                         0
                     });
+                    if repeat_mode == Repeat::One {
+                        if let Some(track) = current_track.clone() {
+                            queue.insert(0, track);
+                        }
+                    } else if repeat_mode == Repeat::All {
+                        if let Some(track) = current_track.clone() {
+                            queue.push(track);
+                        }
+                    }
+                    if let Some(next_track) = queue.get(0).cloned() {
+                        current_track = Some(next_track);
+                        sink.clear();
+                        current_duration = 0.0;
+                        if let Some(track) = current_track.clone() {
+                            in_evt_clone
+                                .send(PlayerEvent::TrackLoaded(track.clone()))
+                                .unwrap_or_else(|_| {
+                                    println!("Failed to send track loaded event");
+                                    0
+                                });
+                            let Some(ref path) = track.path else {
+                                println!("Track path is None, skipping playback");
+                                continue;
+                            };
+                            if !PathBuf::from(&path).exists() {
+                                println!("Track file does not exist: {}", path);
+                                continue;
+                            }
+                            let file = File::open(&path).unwrap();
+                            let source = Decoder::try_from(file).unwrap();
+                            current_duration = source
+                                .total_duration()
+                                .map(|d| d.as_secs_f32())
+                                .unwrap_or(0.0);
+                            println!("Playing track: {}", current_duration);
+                            sink.append(source);
+                            sink.play();
+                            in_evt_clone.send(PlayerEvent::Resumed).unwrap_or_else(|_| {
+                                println!("Failed to send unpause event");
+                                0
+                            });
+                            println!("Playing track: {:?}", track);
+                        }
+                    } else {
+                        current_track = None;
+                    }
                 } else if !sink.empty() && !sink.is_paused() {
                     if Utc::now().timestamp_millis() - last_progress_updated < 100 {
                         time::sleep(std::time::Duration::from_millis(100)).await;
@@ -220,58 +307,38 @@ impl Player {
             }
         });
         Player {
-            current_track: None,
-            queue: Vec::new(),
             in_cmd,
             in_evt,
-            repeat_mode: Repeat::Off,
         }
     }
 
-    pub fn add_track(&mut self, track: Track) {
-        self.queue.push(track);
+    pub fn add_track(&self, track: Track) {
+        self.in_cmd
+            .send(PlayerCommand::AddTrack(track))
+            .expect("Failed to send add track command");
+        println!("Track added to queue.");
     }
 
-    pub fn play(&mut self) {
-        if self.queue.is_empty() {
-            println!("No tracks in the queue to play.");
-            return;
-        }
-        if let Some(current) = &self.current_track {
-            self.in_cmd.send(PlayerCommand::Stop).unwrap_or_else(|e| {
-                panic!("Failed to send stop command: {}", e);
-            });
-            if self.repeat_mode == Repeat::All {
-                self.queue.push(current.clone());
-            }
-        }
-        self.current_track = Some(self.queue.remove(0));
-        if let Some(track) = &self.current_track {
-            let cmd = PlayerCommand::Play(track.clone());
-            self.in_cmd.send(cmd).expect("Failed to send play command");
-            println!("Playing track: {:?}", track);
-        } else {
-            println!("No track is currently set to play.");
-        }
+    pub fn play(&self) {
+        self.in_cmd
+            .send(PlayerCommand::Play)
+            .expect("Failed to send play command");
+        println!("Play command sent.");
     }
 
-    pub fn seek(&mut self, pos: f32) {
-        if self.current_track.is_some() {
-            let cmd = PlayerCommand::Seek(pos);
-            self.in_cmd.send(cmd).expect("Failed to send seek command");
-            println!("Seeking to position: {}", pos);
-        } else {
-            println!("No track is currently set to seek.");
-        }
+    pub fn seek(&self, pos: f32) {
+        let cmd = PlayerCommand::Seek(pos);
+        self.in_cmd.send(cmd).expect("Failed to send seek command");
+        println!("Seeking to position: {}", pos);
     }
 
-    pub fn pause(&mut self) {
+    pub fn pause(&self) {
         let cmd = PlayerCommand::Pause;
         self.in_cmd.send(cmd).expect("Failed to send pause command");
         println!("Pause command sent.");
     }
 
-    pub fn set_volume(&mut self, volume: f32) {
+    pub fn set_volume(&self, volume: f32) {
         let cmd = PlayerCommand::SetVolume(volume);
         self.in_cmd
             .send(cmd)
@@ -279,7 +346,7 @@ impl Player {
         println!("Volume set to: {}", volume);
     }
 
-    pub fn set_muted(&mut self, muted: bool) {
+    pub fn set_muted(&self, muted: bool) {
         let cmd = PlayerCommand::SetMuted(muted);
         self.in_cmd
             .send(cmd)
@@ -333,12 +400,16 @@ impl Player {
         })
     }
 
-    pub fn clear_queue(&mut self) {
-        self.queue.clear();
-        self.current_track = None;
-        let cmd = PlayerCommand::Stop;
-        self.in_cmd.send(cmd).expect("Failed to send stop command");
+    pub fn clear_queue(&self) {
+        self.in_cmd.send(PlayerCommand::ClearQueue).expect("Failed to send stop command");
         println!("Queue cleared and playback stopped.");
+    }
+
+    pub fn set_repeat(&self, mode: Repeat) {
+        self.in_cmd
+            .send(PlayerCommand::SetRepeat(mode))
+            .expect("Failed to send set repeat command");
+        println!("Repeat mode set.");
     }
 }
 
