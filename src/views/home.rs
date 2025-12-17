@@ -40,6 +40,7 @@ impl HomeView {
 
                 if let Some(player) = PLAYER.get() {
                     println!("Playing track: {:?}", track.title);
+                    player.clear_queue();
                     player.add_track(track);
                     player.play();
                 } else {
