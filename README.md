@@ -8,8 +8,8 @@ The music player you didn't know you needed
 
 [![License](https://img.shields.io/github/license/infiniwave/vibrance)](https://github.com/infiniwave/vibrance/blob/main/LICENSE)
 
+<img height="500" alt="image" src="https://github.com/user-attachments/assets/4783a3a7-9a2a-436a-977f-3f8977322d61" />
 </div>
-
 
 A modern and elegant music player, designed to enhance your desktop music experience with a vibrant and visually appealing interface.
 
