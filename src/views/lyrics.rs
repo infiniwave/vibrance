@@ -3,6 +3,7 @@ use std::time::Duration;
 use gpui::prelude::FluentBuilder;
 use gpui::{AppContext, IntoElement, ParentElement, Render, Styled, Timer, uniform_list};
 use gpui_component::StyledExt;
+use gpui_component::scroll::ScrollableElement;
 use tokio::task;
 
 use crate::{
@@ -32,63 +33,69 @@ impl LyricsView {
                 loop {
                     match receiver.try_recv() {
                         Ok(event) => {
-                            if let PlayerEvent::TrackLoaded(track) = event {
-                                if let Some(this_entity) = this.upgrade() {
-                                    let _ = cx.update_entity(&this_entity, |view, cx| {
-                                        view.current_track = Some(track.clone());
-                                        view.loading = true;
-                                        view.lyrics.clear();
-                                        view.error = None;
-                                        cx.notify();
-                                    });
-                                }
-                                let track_clone = track.clone();
-                                let lyrics_result = task::spawn(async move {
-                                    let artist = track_clone
-                                        .artists
-                                        .first()
-                                        .map(|s| s.as_str())
-                                        .unwrap_or("");
-                                    let title = track_clone
-                                        .title
-                                        .as_deref()
-                                        .unwrap_or("");
+                            match event {
+                                PlayerEvent::TrackLoaded(track) => {
+                                    if let Some(this_entity) = this.upgrade() {
+                                        let _ = cx.update_entity(&this_entity, |view, cx| {
+                                            view.current_track = Some(track.clone());
+                                            view.loading = true;
+                                            view.lyrics.clear();
+                                            view.error = None;
+                                            cx.notify();
+                                        });
+                                    }
+                                    let track_clone = track.clone();
+                                    let lyrics_result = task::spawn(async move {
+                                        let artist = track_clone
+                                            .artists
+                                            .first()
+                                            .map(|s| s.as_str())
+                                            .unwrap_or("");
+                                        let title = track_clone
+                                            .title
+                                            .as_deref()
+                                            .unwrap_or("");
 
-                                    QQProvider::fetch_lyrics(artist, title).await
-                                })
-                                .await;
-                                if let Some(this_entity) = this.upgrade() {
-                                    let _ = cx.update_entity(&this_entity, |view, cx| {
-                                        match lyrics_result {
-                                            Ok(Ok(lyrics_list)) => {
-                                                view.loading = false;
-                                                if let Some(first_lyrics) =
-                                                    lyrics_list.first()
-                                                {
-                                                    view.lyrics = first_lyrics.0.clone();
-                                                } else {
-                                                    view.error =
-                                                        Some("No lyrics found".to_string());
+                                        QQProvider::fetch_lyrics(artist, title).await
+                                    })
+                                    .await;
+                                    if let Some(this_entity) = this.upgrade() {
+                                        let _ = cx.update_entity(&this_entity, |view, cx| {
+                                            match lyrics_result {
+                                                Ok(Ok(lyrics_list)) => {
+                                                    view.loading = false;
+                                                    if let Some(first_lyrics) =
+                                                        lyrics_list.first()
+                                                    {
+                                                        view.lyrics = first_lyrics.0.clone();
+                                                    } else {
+                                                        view.error =
+                                                            Some("No lyrics found".to_string());
+                                                    }
+                                                }
+                                                Ok(Err(e)) => {
+                                                    view.loading = false;
+                                                    view.error = Some(format!(
+                                                        "Failed to fetch lyrics: {}",
+                                                        e
+                                                    ));
+                                                }
+                                                Err(e) => {
+                                                    view.loading = false;
+                                                    view.error = Some(format!(
+                                                        "Task error: {}",
+                                                        e
+                                                    ));
                                                 }
                                             }
-                                            Ok(Err(e)) => {
-                                                view.loading = false;
-                                                view.error = Some(format!(
-                                                    "Failed to fetch lyrics: {}",
-                                                    e
-                                                ));
-                                            }
-                                            Err(e) => {
-                                                view.loading = false;
-                                                view.error = Some(format!(
-                                                    "Task error: {}",
-                                                    e
-                                                ));
-                                            }
-                                        }
-                                        cx.notify();
-                                    });
+                                            cx.notify();
+                                        });
+                                    }
                                 }
+                                PlayerEvent::Progress(progress) => {
+
+                                }
+                                _ => {}
                             }
                         }
                         Err(tokio::sync::broadcast::error::TryRecvError::Lagged(n)) => {
@@ -158,21 +165,18 @@ impl Render for LyricsView {
             .when(!self.loading && !self.lyrics.is_empty(), |div| {
                 let lyrics = self.lyrics.clone();
                 div.child(
-                    uniform_list(
-                        "lyrics-list",
-                        lyrics.len(),
-                        move |range, _window, _cx| {
-                            range
-                                .map(|i| {
-                                    gpui::div()
-                                        .text_base()
-                                        .py_1()
-                                        .child(lyrics[i].text.clone())
-                                })
-                                .collect()
-                        },
-                    )
-                    .flex_1()
+                    gpui::div()
+                        .flex_1()
+                        .min_h_0()
+                        .v_flex()
+                        .children(lyrics.iter()
+                            .map(|i| {
+                                gpui::div()
+                                    .text_base()
+                                    .py_1()
+                                    .child(i.text.clone())
+                            }))
+                        .overflow_y_scrollbar()
                 )
             })
     }

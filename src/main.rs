@@ -72,14 +72,20 @@ impl Render for App {
             .text_color(rgb(16777215))
             .v_flex()
             .size_full()
-            .items_center()
-            .justify_center()
             .child(
                 div()
                     .h_flex()
-                    .size_full()
+                    .w_full()
+                    .flex_1()
+                    .min_h_0()
                     .child(self.sidebar.clone())
-                    .child(render),
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_h_0()
+                            .h_full()
+                            .child(render)
+                    ),
             )
             .child(self.player.clone())
     }
