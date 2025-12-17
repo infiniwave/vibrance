@@ -202,7 +202,10 @@ impl Player {
                             } else {
                                 sink.pause();
                                 in_evt_clone
-                                    .send(PlayerEvent::Progress(sink.get_pos().as_secs_f32(), current_duration))
+                                    .send(PlayerEvent::Progress(
+                                        sink.get_pos().as_secs_f32(),
+                                        current_duration,
+                                    ))
                                     .unwrap();
                                 in_evt_clone.send(PlayerEvent::Paused).unwrap_or_else(|_| {
                                     println!("Failed to send pause event");
@@ -297,17 +300,17 @@ impl Player {
                     }
                     // Emit progress event based on current position
                     in_evt_clone
-                        .send(PlayerEvent::Progress(sink.get_pos().as_secs_f32(), current_duration))
+                        .send(PlayerEvent::Progress(
+                            sink.get_pos().as_secs_f32(),
+                            current_duration,
+                        ))
                         .unwrap();
                     last_progress_updated = Utc::now().timestamp_millis();
                 }
                 time::sleep(std::time::Duration::from_millis(200)).await;
             }
         });
-        Player {
-            in_cmd,
-            in_evt,
-        }
+        Player { in_cmd, in_evt }
     }
 
     pub fn add_track(&self, track: Track) {
@@ -399,7 +402,9 @@ impl Player {
     }
 
     pub fn clear_queue(&self) {
-        self.in_cmd.send(PlayerCommand::ClearQueue).expect("Failed to send stop command");
+        self.in_cmd
+            .send(PlayerCommand::ClearQueue)
+            .expect("Failed to send stop command");
         println!("Queue cleared and playback stopped.");
     }
 

@@ -79,13 +79,7 @@ impl Render for App {
                     .flex_1()
                     .min_h_0()
                     .child(self.sidebar.clone())
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_h_0()
-                            .h_full()
-                            .child(render)
-                    ),
+                    .child(div().flex_1().min_h_0().h_full().child(render)),
             )
             .child(self.player.clone())
     }
@@ -253,7 +247,8 @@ async fn main() {
         cx.open_window(WindowOptions::default(), |window, cx| {
             let view = cx.new(|cx| App::new(window, cx));
             if preferences.use_system_audio_controls {
-                let controls = controls::initialize(window).expect("Failed to initialize media controls");
+                let controls =
+                    controls::initialize(window).expect("Failed to initialize media controls");
                 let controls_mutex = Mutex::new(controls);
                 CONTROLS
                     .set(controls_mutex)

@@ -70,17 +70,12 @@ impl Player {
 
         cx.spawn(async move |this, cx| {
             // wait for player to be initialized and subscribe
-            let player = PLAYER
-                .get()
-                .expect("Player not initialized");
+            let player = PLAYER.get().expect("Player not initialized");
             let mut receiver = player.out_evt_receiver();
             if let Some(this_entity) = this.upgrade() {
-                let _ = cx.update_entity(
-                    &this_entity,
-                    |player_component: &mut Player, cx| {
-                        player_component.cmd_sender = Some(player.in_cmd.clone());
-                    },
-                );
+                let _ = cx.update_entity(&this_entity, |player_component: &mut Player, cx| {
+                    player_component.cmd_sender = Some(player.in_cmd.clone());
+                });
             }
 
             // need to loop twice. inner loop to drain all messages
@@ -268,27 +263,44 @@ impl Render for Player {
                                         .on_click(cx.listener(|t, _, _, _| {})),
                                 ),
                         )
-                        .child(div()
+                        .child(
+                            div()
                                 .col_span(1)
                                 .h_flex()
                                 .gap_4()
                                 .justify_end()
-                            .child(Button::new("repeat").when(self.repeat == Repeat::Off, |s| s.icon(Icon::ArrowRepeatOff)).when(self.repeat ==Repeat::All, |s| s.icon(Icon::ArrowRepeatAll)).when(self.repeat ==Repeat::One, |s| s.icon(Icon::ArrowRepeatOne)).on_click(cx.listener(|t, _, _, _| {
-                                t.repeat = match t.repeat {
-                                    Repeat::Off => Repeat::All,
-                                    Repeat::All => Repeat::One,
-                                    Repeat::One => Repeat::Off,
-                                };
-                                t.cmd_sender.as_ref().map(|sender| {
-                                    let _ = sender.send(PlayerCommand::SetRepeat(t.repeat.clone()));
-                                });
-                            })))
-                            .child(Popover::new("volume_popover").trigger(Button::new("volume").icon(Icon::Speaker2)).child(
-                                div()
-                                    .py_2()
-                                    .child(Slider::new(&self.volume_state).vertical().h_24()))
-                            ),
-                        )
+                                .child(
+                                    Button::new("repeat")
+                                        .when(self.repeat == Repeat::Off, |s| {
+                                            s.icon(Icon::ArrowRepeatOff)
+                                        })
+                                        .when(self.repeat == Repeat::All, |s| {
+                                            s.icon(Icon::ArrowRepeatAll)
+                                        })
+                                        .when(self.repeat == Repeat::One, |s| {
+                                            s.icon(Icon::ArrowRepeatOne)
+                                        })
+                                        .on_click(cx.listener(|t, _, _, _| {
+                                            t.repeat = match t.repeat {
+                                                Repeat::Off => Repeat::All,
+                                                Repeat::All => Repeat::One,
+                                                Repeat::One => Repeat::Off,
+                                            };
+                                            t.cmd_sender.as_ref().map(|sender| {
+                                                let _ = sender.send(PlayerCommand::SetRepeat(
+                                                    t.repeat.clone(),
+                                                ));
+                                            });
+                                        })),
+                                )
+                                .child(
+                                    Popover::new("volume_popover")
+                                        .trigger(Button::new("volume").icon(Icon::Speaker2))
+                                        .child(div().py_2().child(
+                                            Slider::new(&self.volume_state).vertical().h_24(),
+                                        )),
+                                ),
+                        ),
                 ),
         )
     }
