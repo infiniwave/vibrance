@@ -6,6 +6,7 @@ use reqwest::Url;
 use crate::lyrics::{LyricLine, LyricSource, get_client};
 
 pub struct QQProvider;
+// TODO: cache lyrics to reduce network requests
 impl LyricSource for QQProvider {
     async fn fetch_lyrics(artist: &str, title: &str) -> Result<Vec<crate::lyrics::Lyrics>> {
         let mut url = Url::parse("https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg")

@@ -17,7 +17,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::components::icon::Icon;
 use crate::components::render_image;
-use crate::player::{PLAYER, PlayerCommand, PlayerEvent, Track};
+use crate::player::{PLAYER, PlayerCommand, PlayerEvent, Repeat, Track};
 
 pub struct Player {
     playback_position: f32,
@@ -29,6 +29,7 @@ pub struct Player {
     cmd_sender: Option<UnboundedSender<PlayerCommand>>,
     paused: bool,
     volume_state: Entity<SliderState>,
+    repeat: Repeat,
 }
 
 impl Player {
@@ -144,6 +145,7 @@ impl Player {
             cmd_sender: None,
             paused: false,
             volume_state,
+            repeat: Repeat::Off,
         }
     }
 
@@ -192,8 +194,6 @@ impl Render for Player {
         self.playback_state.update(cx, |state, cx| {
             state.set_value(slider_value, window, cx);
         });
-        // TODO: center controls
-        // TODO: volume controller
         GroupBox::new().outline().child(
             div()
                 .w_full()
@@ -271,9 +271,18 @@ impl Render for Player {
                         .child(div()
                                 .col_span(1)
                                 .h_flex()
+                                .gap_4()
                                 .justify_end()
-                            // .child(Button::new("repeat").when(Repeat::Off, |s| s.icon(Icon::ArrowRepeatOff)).when(Repeat::All, |s| s.icon(Icon::ArrowRepeatAll)).when(Repeat::One, |s| s.icon(Icon::ArrowRepeatOne)).on_click(cx.listener(|t, _, _, _| {
-                            // })))
+                            .child(Button::new("repeat").when(self.repeat == Repeat::Off, |s| s.icon(Icon::ArrowRepeatOff)).when(self.repeat ==Repeat::All, |s| s.icon(Icon::ArrowRepeatAll)).when(self.repeat ==Repeat::One, |s| s.icon(Icon::ArrowRepeatOne)).on_click(cx.listener(|t, _, _, _| {
+                                t.repeat = match t.repeat {
+                                    Repeat::Off => Repeat::All,
+                                    Repeat::All => Repeat::One,
+                                    Repeat::One => Repeat::Off,
+                                };
+                                t.cmd_sender.as_ref().map(|sender| {
+                                    let _ = sender.send(PlayerCommand::SetRepeat(t.repeat.clone()));
+                                });
+                            })))
                             .child(Popover::new("volume_popover").trigger(Button::new("volume").icon(Icon::Speaker2)).child(
                                 div()
                                     .py_2()

@@ -96,7 +96,7 @@ impl Render for HomeView {
                 gpui::div()
                     .text_xl()
                     .font_weight(gpui::FontWeight::BOLD)
-                    .child("Your Library"),
+                    .child("Library"),
             )
             .child(self.track_list.clone())
     }
