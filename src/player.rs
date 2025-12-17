@@ -54,7 +54,7 @@ pub enum PlayerCommand {
 #[derive(Debug, Clone)]
 pub enum PlayerEvent {
     TrackLoaded(Track),
-    Progress(f64),
+    Progress(f32, f32),
     Paused,
     Resumed,
     End,
@@ -201,9 +201,8 @@ impl Player {
                                 });
                             } else {
                                 sink.pause();
-                                let position = sink.get_pos().as_secs_f32() / current_duration;
                                 in_evt_clone
-                                    .send(PlayerEvent::Progress(position.into()))
+                                    .send(PlayerEvent::Progress(sink.get_pos().as_secs_f32(), current_duration))
                                     .unwrap();
                                 in_evt_clone.send(PlayerEvent::Paused).unwrap_or_else(|_| {
                                     println!("Failed to send pause event");
@@ -297,9 +296,8 @@ impl Player {
                         continue; // Skip if the last update was too recent
                     }
                     // Emit progress event based on current position
-                    let position = sink.get_pos().as_secs_f32() / current_duration;
                     in_evt_clone
-                        .send(PlayerEvent::Progress(position.into()))
+                        .send(PlayerEvent::Progress(sink.get_pos().as_secs_f32(), current_duration))
                         .unwrap();
                     last_progress_updated = Utc::now().timestamp_millis();
                 }

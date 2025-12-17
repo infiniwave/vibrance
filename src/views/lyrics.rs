@@ -17,6 +17,7 @@ pub struct LyricsView {
     current_track: Option<Track>,
     loading: bool,
     error: Option<String>,
+    active_line: usize,
 }
 
 impl LyricsView {
@@ -92,8 +93,26 @@ impl LyricsView {
                                         });
                                     }
                                 }
-                                PlayerEvent::Progress(progress) => {
-
+                                PlayerEvent::Progress(progress, duration) => {
+                                    if let Some(this_entity) = this.upgrade() {
+                                        let _ = cx.update_entity(&this_entity, |view, cx| {
+                                            for (i, line) in view.lyrics.iter().enumerate() {
+                                                if progress as f64 >= line.timestamp / 1000.0
+                                                {
+                                                    if view.lyrics.get(i + 1).is_none()
+                                                        || (progress as f64)
+                                                            < view.lyrics[i + 1].timestamp / 1000.0
+                                                    {
+                                                        if view.active_line != i {
+                                                            view.active_line = i;
+                                                            cx.notify();
+                                                        }
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    }
                                 }
                                 _ => {}
                             }
@@ -118,6 +137,7 @@ impl LyricsView {
             current_track: None,
             loading: false,
             error: None,
+            active_line: 0,
         }
     }
 }
@@ -170,11 +190,18 @@ impl Render for LyricsView {
                         .min_h_0()
                         .v_flex()
                         .children(lyrics.iter()
-                            .map(|i| {
+                            .enumerate()
+                            .map(|(i, line)| {
                                 gpui::div()
                                     .text_base()
                                     .py_1()
-                                    .child(i.text.clone())
+                                    .child(line.text.clone())
+                                    .when(i != self.active_line, |d| {
+                                        d.text_color(gpui::rgb(0x888888))
+                                    })
+                                    .when(i == self.active_line, |d| {
+                                        d.font_weight(gpui::FontWeight::BOLD)
+                                    })
                             }))
                         .overflow_y_scrollbar()
                 )

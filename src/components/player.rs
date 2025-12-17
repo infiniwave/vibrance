@@ -92,12 +92,12 @@ impl Player {
                                 let _ = cx.update_entity(
                                     &this_entity,
                                     |player_component: &mut Player, cx| match event {
-                                        PlayerEvent::Progress(position) => {
+                                        PlayerEvent::Progress(position, length) => {
                                             if !player_component.is_seeking {
                                                 player_component.playback_position =
-                                                    position as f32;
+                                                    position / length as f32;
                                                 player_component.playback_position_secs =
-                                                    position * player_component.duration_secs;
+                                                    position as f64;
                                                 cx.notify();
                                             }
                                         }

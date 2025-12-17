@@ -4,7 +4,7 @@ use reqwest::Client;
 
 #[derive(Debug, Clone)]
 pub struct LyricLine {
-    pub timestamp: f64, // seconds
+    pub timestamp: f64, // ms
     pub text: String,
 }
 

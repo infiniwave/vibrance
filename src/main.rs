@@ -141,7 +141,7 @@ async fn main() {
         println!("Starting progress receiver thread");
         while let Ok(event) = recv.recv().await {
             match event {
-                PlayerEvent::Progress(progress_value) => {
+                PlayerEvent::Progress(progress_value, len) => {
                     // TODO: Update media controls progress
                     println!("Progress: {}", progress_value);
                 }
