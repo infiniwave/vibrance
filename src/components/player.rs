@@ -206,14 +206,13 @@ impl Render for Player {
                 .child(
                     gpui::div()
                         .w_full()
-                        .grid()
-                        .grid_cols(3)
+                        .h_flex()
                         .child(
                             div()
-                                .col_span(1)
                                 .h_flex()
                                 .gap_4()
                                 .flex_1()
+                                .mr_4()
                                 .min_w_0()
                                 .child(
                                     div()
@@ -234,8 +233,6 @@ impl Render for Player {
                                 .child(
                                     div()
                                         .v_flex()
-                                        // .border_1()
-                                        // .border_color(gpui::rgb(0x000000))
                                         .flex_1()
                                         .min_w_0()
                                         .w_full()
@@ -245,7 +242,6 @@ impl Render for Player {
                         )
                         .child(
                             div()
-                                .col_span(1)
                                 .h_flex()
                                 .justify_center()
                                 .gap_4()
@@ -272,9 +268,10 @@ impl Render for Player {
                         )
                         .child(
                             div()
-                                .col_span(1)
+                                .flex_1()
                                 .h_flex()
                                 .gap_4()
+                                .ml_4()
                                 .justify_end()
                                 .child(
                                     Button::new("repeat")
