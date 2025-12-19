@@ -20,8 +20,8 @@ pub fn initialize(window: &mut Window) -> Result<OsMediaControls> {
     let config = {
         use souvlaki::platform::mpris::MprisConfig;
         MprisConfig {
-            dbus_name: "vibrance",
-            display_name: "Vibrance",
+            dbus_name: "vibrance".to_string(),
+            display_name: "Vibrance".to_string(),
         }
     };
     let mut controls = OsMediaControls::new(config)
