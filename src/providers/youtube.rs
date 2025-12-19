@@ -44,7 +44,7 @@ pub async fn search_tracks(query: &str) -> Result<Vec<YtTrack>> {
     let client = get_client();
     let results = client.query().music_search_tracks(query).await?;
     let map_track = |track: TrackItem| async move {
-        let album_art_url = track.cover.first().as_ref().map(|c| c.url.clone());
+        let album_art_url = track.cover.first().map(|c| c.url.clone());
         let album_art = match album_art_url {
             Some(url) => {
                 async {
@@ -60,19 +60,21 @@ pub async fn search_tracks(query: &str) -> Result<Vec<YtTrack>> {
             }
             None => None,
         };
+        let artist = track
+            .artists
+            .iter()
+            .map(|a| a.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let album = track
+            .album
+            .as_ref()
+            .map_or_else(|| "Unknown Album".to_string(), |a| a.name.clone());
         YtTrack {
             id: track.id,
             title: track.name,
-            artist: track
-                .artists
-                .iter()
-                .map(|a| a.name.clone())
-                .collect::<Vec<_>>()
-                .join(", "),
-            album: track
-                .album
-                .as_ref()
-                .map_or("Unknown Album".to_string(), |a| a.name.clone()),
+            artist,
+            album,
             album_art,
             duration: track.duration.unwrap(),
         }
@@ -188,7 +190,7 @@ pub async fn download_track_default(id: &str) -> Result<Track> {
         album_art: album_cover,
         duration: track.track.duration.unwrap_or(0) as f64,
         path: Some(path),
-        yt_id: Some(track.track.id.clone()),
+        yt_id: Some(track.track.id),
     };
     let mut preferences = PREFERENCES
         .get()

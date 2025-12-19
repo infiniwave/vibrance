@@ -140,14 +140,14 @@ impl Player {
                                 }
                             }
                             current_track = Some(queue.remove(0));
-                            if let Some(track) = current_track.clone() {
+                            if let Some(ref track) = current_track {
                                 in_evt_clone
                                     .send(PlayerEvent::TrackLoaded(track.clone()))
                                     .unwrap_or_else(|_| {
                                         println!("Failed to send track loaded event");
                                         0
                                     });
-                                let Some(path) = &track.path else {
+                                let Some(ref path) = track.path else {
                                     println!("Track path is None, skipping playback");
                                     continue;
                                 };
@@ -248,19 +248,19 @@ impl Player {
                         0
                     });
                     if repeat_mode == Repeat::One {
-                        if let Some(track) = current_track.clone() {
-                            queue.insert(0, track);
+                        if let Some(ref track) = current_track {
+                            queue.insert(0, track.clone());
                         }
                     } else if repeat_mode == Repeat::All {
-                        if let Some(track) = current_track.clone() {
-                            queue.push(track);
+                        if let Some(ref track) = current_track {
+                            queue.push(track.clone());
                         }
                     }
-                    if let Some(next_track) = queue.get(0).cloned() {
+                    if let Some(next_track) = queue.first().cloned() {
                         current_track = Some(next_track);
                         sink.clear();
                         current_duration = 0.0;
-                        if let Some(track) = current_track.clone() {
+                        if let Some(ref track) = current_track {
                             in_evt_clone
                                 .send(PlayerEvent::TrackLoaded(track.clone()))
                                 .unwrap_or_else(|_| {

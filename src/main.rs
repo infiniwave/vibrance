@@ -102,8 +102,10 @@ async fn main() {
     let preferences = read_preferences()
         .await
         .expect("Failed to read preferences");
+    let initial_volume = preferences.volume;
+    let use_system_controls = preferences.use_system_audio_controls;
     PREFERENCES
-        .set(RwLock::new(preferences.clone()))
+        .set(RwLock::new(preferences))
         .expect("Failed to set preferences");
     println!("Preferences loaded successfully.");
     task::spawn(async move {
@@ -122,7 +124,7 @@ async fn main() {
                 .read()
                 .await;
             if *preferences == previous_preferences {
-                break;
+                continue;
             }
             println!("Preferences changed, saving...");
             if let Err(e) = preferences.save().await {
@@ -134,7 +136,7 @@ async fn main() {
         }
     });
     // Initialize the player
-    let player = Player::new(preferences.volume.clone());
+    let player = Player::new(initial_volume);
     let mut recv = player.out_evt_receiver();
     // Initialize the player helper
     task::spawn(async move {
@@ -152,12 +154,10 @@ async fn main() {
                         .expect("Media controls not initialized")
                         .lock()
                         .await;
-                    let title = track.title.clone();
-                    let album = track.album.clone();
                     #[cfg(target_os = "windows")]
                     {
                         // On Windows, also set the album art if available
-                        if let Some(album_art) = track.album_art.clone() {
+                        if let Some(ref album_art) = track.album_art {
                             use base64::{Engine, prelude::BASE64_STANDARD};
                             use souvlaki::platform::windows::WindowsCover;
                             let cover = BASE64_STANDARD
@@ -170,11 +170,11 @@ async fn main() {
                         }
                     }
                     let c = controls.set_metadata(MediaMetadata {
-                        title: Some(title.unwrap_or("Unknown Title".to_string())),
-                        album_title: Some(album.unwrap_or("Unknown Album".to_string())),    
+                        title: Some(track.title.as_deref().unwrap_or("Unknown Title").to_string()),
+                        album_title: Some(track.album.as_deref().unwrap_or("Unknown Album").to_string()),    
                         duration: Some(Duration::from_secs_f64(track.duration)),
                         artist: Some(track.artists.join(", ")),
-                        artists: Some(track.artists.clone()),
+                        artists: Some(track.artists),
                         ..Default::default()
                     });
                     if let Err(e) = c {
@@ -184,7 +184,6 @@ async fn main() {
                     // println!("Track loaded: {}", track.file_path);
                 }
                 PlayerEvent::Paused => {
-                    // TODO: Update media controls playback state to paused
                     let mut controls = CONTROLS
                         .get()
                         .expect("Media controls not initialized")
@@ -198,7 +197,6 @@ async fn main() {
                     // println!("Playback paused: {}", paused);
                 }
                 PlayerEvent::Resumed => {
-                    // TODO: Update media controls playback state to playing
                     let mut controls = CONTROLS
                         .get()
                         .expect("Media controls not initialized")
@@ -275,7 +273,7 @@ async fn main() {
             ..Default::default()
         }, |window, cx| {
             let view = cx.new(|cx| App::new(window, cx));
-            if preferences.use_system_audio_controls {
+            if use_system_controls {
                 let controls =
                     controls::initialize(window).expect("Failed to initialize media controls");
                 let controls_mutex = Mutex::new(controls);

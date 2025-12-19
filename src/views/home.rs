@@ -18,13 +18,11 @@ pub struct HomeView {
 impl HomeView {
     pub fn new(window: &mut gpui::Window, cx: &mut gpui::Context<Self>) -> Self {
         let on_play_callback: Arc<dyn Fn(Track) + Send + Sync> = Arc::new(move |track: Track| {
-            let track_clone = track.clone();
-
             task::spawn(async move {
-                let track = if track_clone.yt_id.is_some() && track_clone.path.is_none() {
-                    println!("Downloading YouTube track: {:?}", track_clone.yt_id);
+                let track = if track.yt_id.is_some() && track.path.is_none() {
+                    println!("Downloading YouTube track: {:?}", track.yt_id);
                     match providers::youtube::download_track_default(
-                        track_clone.yt_id.as_ref().unwrap(),
+                        track.yt_id.as_ref().unwrap(),
                     )
                     .await
                     {
@@ -35,7 +33,7 @@ impl HomeView {
                         }
                     }
                 } else {
-                    track_clone
+                    track
                 };
 
                 if let Some(player) = PLAYER.get() {
@@ -60,7 +58,7 @@ impl HomeView {
             let tracks = task::spawn(async move {
                 if let Some(prefs) = PREFERENCES.get() {
                     let prefs = prefs.read().await;
-                    prefs.all_tracks()
+                    prefs.all_tracks().into_iter().cloned().collect()
                 } else {
                     vec![]
                 }

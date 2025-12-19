@@ -7932,7 +7932,6 @@ dependencies = [
  "lrc",
  "once_cell",
  "raw-window-handle",
- "rayon",
  "regex",
  "reqwest",
  "rodio",

@@ -61,6 +61,9 @@ impl ListDelegate for TrackListDelegate {
             let aa = track.album_art.clone();
             let track_for_click = track.clone();
             let on_play = self.on_play.clone();
+            let title = track.title.as_deref().unwrap_or("Unknown Title");
+            let artists = track.artists.join(", ");
+            let track_id = track.id.clone();
             //println!("Rendering track at index {}: {:?}", ix.row, track);
             ListItem::new(ix)
                 .child(
@@ -75,7 +78,7 @@ impl ListDelegate for TrackListDelegate {
                                 .child(
                                     img(ImageSource::Custom(Arc::new(move |w, a| {
                                         // album_art is base64
-                                        if let Some(album_art) = &aa {
+                                        if let Some(ref album_art) = aa {
                                             Some(render_image(w, a, album_art))
                                         } else {
                                             None
@@ -88,18 +91,13 @@ impl ListDelegate for TrackListDelegate {
                                     div()
                                         .v_flex()
                                         .child(
-                                            div().child(
-                                                track
-                                                    .title
-                                                    .clone()
-                                                    .unwrap_or("Unknown Title".to_string()),
-                                            ).text_ellipsis(),
+                                            div().child(title.to_string()).text_ellipsis(),
                                         )
-                                        .child(div().child(track.artists.clone().join(", ")).text_sm().text_ellipsis()),
+                                        .child(div().child(artists).text_sm().text_ellipsis()),
                                 ),
                         )
                         .child(
-                            Button::new(SharedString::new(format!("play_{}", track.id)))
+                            Button::new(SharedString::new(format!("play_{}", track_id)))
                                 .icon(Icon::Play)
                                 .on_click(move |_event, _window, _cx| {
                                     if let Some(ref callback) = on_play {

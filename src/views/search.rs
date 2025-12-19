@@ -32,13 +32,11 @@ impl SearchView {
         let input_state = cx.new(|cx| InputState::new(window, cx).placeholder("Search..."));
 
         let on_play_callback: Arc<dyn Fn(Track) + Send + Sync> = Arc::new(move |track: Track| {
-            let track_clone = track.clone();
-
             task::spawn(async move {
-                let track = if track_clone.yt_id.is_some() && track_clone.path.is_none() {
-                    println!("Downloading YouTube track: {:?}", track_clone.yt_id);
+                let track = if track.yt_id.is_some() && track.path.is_none() {
+                    println!("Downloading YouTube track: {:?}", track.yt_id);
                     match providers::youtube::download_track_default(
-                        track_clone.yt_id.as_ref().unwrap(),
+                        track.yt_id.as_ref().unwrap(),
                     )
                     .await
                     {
@@ -49,7 +47,7 @@ impl SearchView {
                         }
                     }
                 } else {
-                    track_clone
+                    track
                 };
 
                 if let Some(player) = PLAYER.get() {

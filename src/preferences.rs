@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use once_cell::sync::OnceCell;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
@@ -53,55 +52,40 @@ impl Preferences {
     }
     pub fn add_unorganized_track(&mut self, track: Track) {
         // check if the track already exists by file name
-        let existing_track = self
+        let exists = self
             .unorganized_tracks
-            .iter()
-            .find(|(_, t)| t.path == track.path || t.yt_id == track.yt_id);
-        if let Some((_, existing_track)) = existing_track {
+            .values()
+            .any(|t| t.path == track.path || t.yt_id == track.yt_id);
+        if exists {
             // ignore if the track already exists
             return;
         }
         self.unorganized_tracks.insert(track.id.clone(), track);
     }
-    pub fn find_track_by_id(&self, id: &str) -> Option<Track> {
-        let mut track = self.unorganized_tracks.get(id).map(|track| track.clone());
-        if track.is_none() {
-            track = self
-                .user_library
-                .par_iter()
-                .find_map_any(|(_, tracks)| tracks.par_iter().find_any(|track| track.1.id == id))
-                .map(|(_, track)| track.clone());
+    pub fn find_track_by_id(&self, id: &str) -> Option<&Track> {
+        if let Some(track) = self.unorganized_tracks.get(id) {
+            return Some(track);
         }
-        track
+        self.user_library
+            .values()
+            .find_map(|tracks| tracks.get(id))
     }
-    pub fn find_track_by_yt_id(&self, yt_id: &str) -> Option<Track> {
-        let mut track = self
+    pub fn find_track_by_yt_id(&self, yt_id: &str) -> Option<&Track> {
+        if let Some(track) = self
             .unorganized_tracks
             .values()
             .find(|t| t.yt_id.as_deref() == Some(yt_id))
-            .cloned();
-        if track.is_none() {
-            track = self
-                .user_library
-                .par_iter()
-                .find_map_any(|(_, tracks)| {
-                    tracks.values().find(|t| t.yt_id.as_deref() == Some(yt_id))
-                })
-                .cloned();
+        {
+            return Some(track);
         }
-        track
-    }
-    pub fn all_tracks(&self) -> Vec<Track> {
-        let tracks = self.unorganized_tracks.values().collect::<Vec<_>>();
-        let library = self
-            .user_library
+        self.user_library
             .values()
-            .flat_map(|tracks| tracks.values())
-            .collect::<Vec<_>>();
-        tracks
-            .into_iter()
-            .chain(library.into_iter())
-            .map(|t| t.clone())
+            .find_map(|tracks| tracks.values().find(|t| t.yt_id.as_deref() == Some(yt_id)))
+    }
+    pub fn all_tracks(&self) -> Vec<&Track> {
+        self.unorganized_tracks
+            .values()
+            .chain(self.user_library.values().flat_map(|tracks| tracks.values()))
             .collect()
     }
 }

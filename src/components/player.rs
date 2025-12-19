@@ -148,7 +148,7 @@ impl Player {
         self.duration_secs = track.duration;
         self.playback_position_secs = 0.0;
         self.playback_position = 0.0;
-        self.current_track = Some(track.clone());
+        self.current_track = Some(track);
         cx.notify();
     }
 
@@ -174,7 +174,7 @@ impl Render for Player {
             .current_track
             .as_ref()
             .map(|t| t.artists.join(", "))
-            .unwrap_or_else(|| "".to_string());
+            .unwrap_or_default();
         let album_art = self
             .current_track
             .as_ref()
