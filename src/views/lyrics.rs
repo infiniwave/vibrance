@@ -1,9 +1,8 @@
 use std::time::Duration;
 
 use gpui::prelude::FluentBuilder;
-use gpui::{AppContext, IntoElement, ParentElement, Render, Styled, Timer, uniform_list};
+use gpui::{AppContext, InteractiveElement, IntoElement, ParentElement, Render, ScrollHandle, StatefulInteractiveElement, Styled, Timer};
 use gpui_component::StyledExt;
-use gpui_component::scroll::ScrollableElement;
 use tokio::task;
 
 use crate::{
@@ -18,6 +17,7 @@ pub struct LyricsView {
     loading: bool,
     error: Option<String>,
     active_line: usize,
+    scroll_handle: ScrollHandle,
 }
 
 impl LyricsView {
@@ -82,7 +82,7 @@ impl LyricsView {
                                     });
                                 }
                             }
-                            PlayerEvent::Progress(progress, duration) => {
+                            PlayerEvent::Progress(progress, _duration) => {
                                 if let Some(this_entity) = this.upgrade() {
                                     let _ = cx.update_entity(&this_entity, |view, cx| {
                                         for (i, line) in view.lyrics.iter().enumerate() {
@@ -93,6 +93,7 @@ impl LyricsView {
                                                 {
                                                     if view.active_line != i {
                                                         view.active_line = i;
+                                                        view.scroll_handle.scroll_to_top_of_item(i);
                                                         cx.notify();
                                                     }
                                                     break;
@@ -125,6 +126,7 @@ impl LyricsView {
             loading: false,
             error: None,
             active_line: 0,
+            scroll_handle: ScrollHandle::new(),
         }
     }
 }
@@ -182,9 +184,12 @@ impl Render for LyricsView {
                 let lyrics = self.lyrics.clone();
                 div.child(
                     gpui::div()
+                        .id("lyrics-scroll-container")
                         .flex_1()
                         .min_h_0()
                         .v_flex()
+                        .overflow_y_scroll()
+                        .track_scroll(&self.scroll_handle)
                         .children(lyrics.iter().enumerate().map(|(i, line)| {
                             gpui::div()
                                 .text_base()
@@ -194,8 +199,7 @@ impl Render for LyricsView {
                                 .when(i == self.active_line, |d| {
                                     d.font_weight(gpui::FontWeight::BOLD)
                                 })
-                        }))
-                        .overflow_y_scrollbar(),
+                        })),
                 )
             })
     }
