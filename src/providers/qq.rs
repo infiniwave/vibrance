@@ -1,6 +1,7 @@
 use anyhow::Result;
 use base64::{Engine, prelude::BASE64_STANDARD};
 use lrc::Lyrics;
+use regex::Regex;
 use reqwest::Url;
 
 use crate::lyrics::{LyricLine, LyricSource, get_client};
@@ -79,6 +80,11 @@ impl LyricSource for QQProvider {
                 .replace("&nbsp;", " ")
                 .replace("&ensp;", " ")
                 .replace("&emsp;", " ");
+            // strip tags that the parser can't handle
+            let result = Regex::new(r"\[[^\d:]+:[^\]]*\]")
+                .unwrap()
+                .replace_all(&result, "")
+                .to_string();
             let mut parsed = Lyrics::from_str(&result)?
                 .get_timed_lines()
                 .iter()

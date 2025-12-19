@@ -7926,6 +7926,7 @@ dependencies = [
  "once_cell",
  "raw-window-handle",
  "rayon",
+ "regex",
  "reqwest",
  "rodio",
  "rust-embed",
