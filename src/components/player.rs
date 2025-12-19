@@ -30,6 +30,7 @@ pub struct Player {
     paused: bool,
     volume_state: Entity<SliderState>,
     repeat: Repeat,
+    album_art_source: Option<ImageSource>,
 }
 
 impl Player {
@@ -141,6 +142,7 @@ impl Player {
             paused: false,
             volume_state,
             repeat: Repeat::Off,
+            album_art_source: None,
         }
     }
 
@@ -148,6 +150,11 @@ impl Player {
         self.duration_secs = track.duration;
         self.playback_position_secs = 0.0;
         self.playback_position = 0.0;
+        self.album_art_source = track.album_art.clone().map(|album_art| {
+            ImageSource::Custom(Arc::new(move |w, a| {
+                Some(render_image(w, a, &album_art))
+            }))
+        });
         self.current_track = Some(track);
         cx.notify();
     }
@@ -175,10 +182,6 @@ impl Render for Player {
             .as_ref()
             .map(|t| t.artists.join(", "))
             .unwrap_or_default();
-        let album_art = self
-            .current_track
-            .as_ref()
-            .and_then(|t| t.album_art.clone());
 
         // format current position and duration
         let current_time = Self::format_time(self.playback_position_secs);
@@ -189,6 +192,9 @@ impl Render for Player {
         self.playback_state.update(cx, |state, cx| {
             state.set_value(slider_value, window, cx);
         });
+        
+        let album_art_source = self.album_art_source.clone();
+        
         GroupBox::new().outline().child(
             div()
                 .w_full()
@@ -217,16 +223,9 @@ impl Render for Player {
                                 .child(
                                     div()
                                         .h_flex()
-                                        .child(
-                                            img(ImageSource::Custom(Arc::new(move |w, a| {
-                                                if let Some(ref album_art) = album_art {
-                                                    Some(render_image(w, a, album_art))
-                                                } else {
-                                                    None
-                                                }
-                                            })))
-                                            .rounded_md(),
-                                        )
+                                        .when_some(album_art_source, |el, source| {
+                                            el.child(img(source).rounded_md())
+                                        })
                                         .w_20()
                                         .h_20(),
                                 )
