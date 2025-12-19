@@ -3435,6 +3435,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "infer"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "865e8a58ae8e24d2c4412c31344afa1d302a3740ad67528c10f50d6876cdcf55"
+
+[[package]]
 name = "inotify"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6325,16 +6331,17 @@ dependencies = [
 [[package]]
 name = "souvlaki"
 version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5855c8f31521af07d896b852eaa9eca974ddd3211fc2ae292e58dda8eb129bc8"
+source = "git+https://github.com/Sinono3/souvlaki.git?branch=0.9#afa1c6807b2c70a4b3b636e720fadbe64bda2ff8"
 dependencies = [
  "base64",
  "block",
+ "cfg_aliases",
  "cocoa 0.24.1",
  "core-graphics 0.22.3",
  "dbus",
  "dbus-crossroads",
  "dispatch",
+ "infer",
  "objc",
  "thiserror 1.0.69",
  "windows 0.44.0",

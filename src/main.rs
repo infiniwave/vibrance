@@ -14,7 +14,7 @@ use gpui::*;
 use gpui_component::*;
 use gpui_component_assets::Assets;
 use once_cell::sync::OnceCell;
-use souvlaki::{MediaControls, MediaMetadata, MediaPlayback};
+use souvlaki::{MediaMetadata, MediaPlayback, OsMediaControls};
 use tokio::{
     sync::{Mutex, RwLock},
     task, time,
@@ -88,7 +88,7 @@ impl Render for App {
 // const DM_SANS: &[u8] = include_bytes!("./resources/fonts/dm-sans-variable.ttf");
 // const DM_SANS_ITALIC: &[u8] = include_bytes!("./resources/fonts/dm-sans-italic-variable.ttf");
 
-static CONTROLS: OnceCell<Mutex<MediaControls>> = OnceCell::new();
+static CONTROLS: OnceCell<Mutex<OsMediaControls>> = OnceCell::new();
 
 #[tokio::main]
 async fn main() {
@@ -148,12 +148,28 @@ async fn main() {
                         .await;
                     let title = track.title.clone();
                     let album = track.album.clone();
+                    #[cfg(target_os = "windows")]
+                    {
+                        // On Windows, also set the album art if available
+                        if let Some(album_art) = track.album_art.clone() {
+                            use base64::{Engine, prelude::BASE64_STANDARD};
+                            use souvlaki::platform::windows::WindowsCover;
+                            let cover = BASE64_STANDARD
+                                .decode(album_art)
+                                .expect("Failed to decode album art");
+                            controls.set_cover(Some(WindowsCover::Bytes(cover))).
+                                unwrap_or_else(|e| {
+                                    eprintln!("Failed to set album art: {:?}", e);
+                                });
+                        }
+                    }
                     let c = controls.set_metadata(MediaMetadata {
-                        title: Some(&title.unwrap_or("Unknown Title".to_string())),
-                        album: Some(&album.unwrap_or("Unknown Album".to_string())),
+                        title: Some(title.unwrap_or("Unknown Title".to_string())),
+                        album_title: Some(album.unwrap_or("Unknown Album".to_string())),    
                         duration: Some(Duration::from_secs_f64(track.duration)),
-                        artist: Some(&track.artists.join(", ")),
-                        cover_url: None,
+                        artist: Some(track.artists.join(", ")),
+                        artists: Some(track.artists.clone()),
+                        ..Default::default()
                     });
                     if let Err(e) = c {
                         eprintln!("Failed to set metadata: {:?}", e);
@@ -244,7 +260,13 @@ async fn main() {
         })
         .detach();
 
-        cx.open_window(WindowOptions::default(), |window, cx| {
+        cx.open_window(WindowOptions {
+            titlebar: Some(TitlebarOptions {
+                title: Some(SharedString::new("Vibrance")),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }, |window, cx| {
             let view = cx.new(|cx| App::new(window, cx));
             if preferences.use_system_audio_controls {
                 let controls =
