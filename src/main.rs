@@ -62,8 +62,14 @@ impl Render for App {
             NavigationState::Search => self.search_view.clone().into_any_element(),
             NavigationState::Lyrics => self.lyrics_view.clone().into_any_element(),
         };
+        // This is a weird bug as "DM Sans" works perfectly fine on Linux, but
+        // Windows only recognises the font as "DM Sans 14pt" for some reason.
+        #[cfg(target_os = "windows")]
+        let font_name = "DM Sans 14pt";
+        #[cfg(not(target_os = "windows"))]
+        let font_name = "DM Sans";
         div()
-            .font(font("DM Sans"))
+            .font(font(font_name))
             .bg(linear_gradient(
                 135.0,
                 linear_color_stop(rgb(0x1D0034), 0.0),
