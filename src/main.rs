@@ -271,6 +271,7 @@ async fn main() {
                 title: Some(SharedString::new("Vibrance")),
                 ..Default::default()
             }),
+            window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(900.0), px(700.0)), cx))),
             ..Default::default()
         }, |window, cx| {
             let view = cx.new(|cx| App::new(window, cx));

@@ -193,12 +193,12 @@ impl Render for Player {
             div()
                 .w_full()
                 .v_flex()
-                .p_2()
                 .gap_4()
                 .child(
                     div()
                         .gap_4()
                         .h_flex()
+                        .text_sm()
                         .child(current_time)
                         .child(Slider::new(&self.playback_state))
                         .child(total_time),
@@ -213,6 +213,8 @@ impl Render for Player {
                                 .col_span(1)
                                 .h_flex()
                                 .gap_4()
+                                .flex_1()
+                                .min_w_0()
                                 .child(
                                     div()
                                         .h_flex()
@@ -226,14 +228,19 @@ impl Render for Player {
                                             })))
                                             .rounded_md(),
                                         )
-                                        .w_16()
-                                        .h_16(),
+                                        .w_20()
+                                        .h_20(),
                                 )
                                 .child(
                                     div()
                                         .v_flex()
-                                        .child(div().child(title).text_lg())
-                                        .child(div().child(artist)),
+                                        // .border_1()
+                                        // .border_color(gpui::rgb(0x000000))
+                                        .flex_1()
+                                        .min_w_0()
+                                        .w_full()
+                                        .child(div().child(title).text_lg().text_ellipsis().font_semibold())
+                                        .child(div().child(artist).text_sm().text_ellipsis()),
                                 ),
                         )
                         .child(

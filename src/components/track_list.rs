@@ -93,9 +93,9 @@ impl ListDelegate for TrackListDelegate {
                                                     .title
                                                     .clone()
                                                     .unwrap_or("Unknown Title".to_string()),
-                                            ),
+                                            ).text_ellipsis(),
                                         )
-                                        .child(div().child(track.artists.clone().join(", "))),
+                                        .child(div().child(track.artists.clone().join(", ")).text_sm().text_ellipsis()),
                                 ),
                         )
                         .child(
