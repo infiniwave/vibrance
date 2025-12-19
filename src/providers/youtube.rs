@@ -107,15 +107,18 @@ pub async fn download_track(id: &str, output_path: &str) -> Result<()> {
         .to_str()?
         .parse::<u64>()?;
     println!("Total size: {} bytes", total_size);
-    let file = Arc::new(Mutex::new(file));
+    let file = Arc::new(Mutex::new(file));    
+    let chunk_size = 1024 * 256; // 256 KB
+    let semaphore = Arc::new(tokio::sync::Semaphore::new(8));
     let mut futures = Vec::new();
-    let chunk_size = 1024 * 128; // 128 KB
     let mut start = 0;
     while start < total_size {
         let end = std::cmp::min(start + chunk_size as u64, total_size);
         let file_clone = Arc::clone(&file);
         let url = audio.url.clone();
+        let semaphore_clone = Arc::clone(&semaphore);
         futures.push(tokio::spawn(async move {
+            let _permit = semaphore_clone.acquire().await?;
             let range_header = format!("bytes={}-{}", start, end - 1);
             let response = client
                 .get(&url)
@@ -129,11 +132,13 @@ pub async fn download_track(id: &str, output_path: &str) -> Result<()> {
                 ));
             }
             println!("Downloading chunk: {}-{}", start, end - 1);
-            let mut file = file_clone.lock().await;
             let bytes = response.bytes().await?;
-            file.seek(SeekFrom::Start(start)).await?;
-            file.write_all(&bytes).await?;
-            file.flush().await?;
+            {
+                let mut file = file_clone.lock().await;
+                file.seek(SeekFrom::Start(start)).await?;
+                file.write_all(&bytes).await?;
+                file.flush().await?;
+            }
             Ok(())
         }));
         start += chunk_size as u64;
