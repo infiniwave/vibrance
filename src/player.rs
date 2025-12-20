@@ -255,16 +255,14 @@ impl Player {
                                     println!("Failed to send track loaded event");
                                     0
                                 });
-                            let Some(ref path) = track.path else {
-                                println!("Track path is None, skipping playback");
-                                continue;
+                            let source = track.load().await;
+                            let source = match source {
+                                Ok(source) => source,
+                                Err(e) => {
+                                    println!("Failed to load track source: {:?}", e);
+                                    continue;
+                                }
                             };
-                            if !PathBuf::from(&path).exists() {
-                                println!("Track file does not exist: {}", path);
-                                continue;
-                            }
-                            let file = File::open(&path).unwrap();
-                            let source = Decoder::try_from(file).unwrap();
                             current_duration = source
                                 .total_duration()
                                 .map(|d| d.as_secs_f32())
