@@ -188,7 +188,11 @@ async fn main() {
                         if let Some(ref album_art) = track.album.album_art {
                             use souvlaki::platform::mpris::MprisCover;
                             controls
-                                .set_cover(Some(MprisCover::from_bytes(album_art)))
+                                .set_cover(Some(
+                                    MprisCover::from_bytes(album_art).expect(
+                                        "Failed to create MPRIS cover from album art bytes",
+                                    ),
+                                ))
                                 .unwrap_or_else(|e| {
                                     eprintln!("Failed to set album art: {:?}", e);
                                 });
