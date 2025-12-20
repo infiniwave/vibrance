@@ -17,7 +17,8 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::components::icon::Icon;
 use crate::components::render_image;
-use crate::player::{PLAYER, PlayerCommand, PlayerEvent, Repeat, Track};
+use crate::library::Track;
+use crate::player::{PLAYER, PlayerCommand, PlayerEvent, Repeat};
 
 pub struct Player {
     playback_position: f32,
@@ -150,9 +151,9 @@ impl Player {
         self.duration_secs = track.duration;
         self.playback_position_secs = 0.0;
         self.playback_position = 0.0;
-        self.album_art_source = track.album_art.clone().map(|album_art| {
+        self.album_art_source = track.album.album_art.clone().map(|album_art| {
             ImageSource::Custom(Arc::new(move |w, a| {
-                Some(render_image(w, a, &album_art))
+                Some(render_image(w, a, album_art.clone()))
             }))
         });
         self.current_track = Some(track);
@@ -175,12 +176,12 @@ impl Render for Player {
         let title = self
             .current_track
             .as_ref()
-            .and_then(|t| t.title.clone())
+            .and_then(|t| Some(t.title.clone()))
             .unwrap_or_else(|| "No track playing".to_string());
         let artist = self
             .current_track
             .as_ref()
-            .map(|t| t.artists.join(", "))
+            .map(|t| t.artists_string())
             .unwrap_or_default();
 
         // format current position and duration

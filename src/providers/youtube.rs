@@ -13,15 +13,13 @@ use rustypipe::{
     param::StreamFilter,
 };
 use tokio::{
-    fs::File,
+    fs::{self, File},
     io::{AsyncSeekExt, AsyncWriteExt},
 };
 use ulid::Ulid;
 
 use crate::{
-    lyrics::{self},
-    player::Track,
-    preferences::PREFERENCES,
+    library::{Album, Artist, LIBRARY, Track, TrackSource}, lyrics::{self},
 };
 
 pub static YT_CLIENT: OnceCell<RustyPipe> = OnceCell::new();
@@ -36,7 +34,7 @@ pub struct YtTrack {
     pub title: String,
     pub artist: String,
     pub album: String,
-    pub album_art: Option<String>, // URL to album art, if available
+    pub album_art: Option<Vec<u8>>,
     pub duration: u32,             // in seconds
 }
 
@@ -51,7 +49,7 @@ pub async fn search_tracks(query: &str) -> Result<Vec<YtTrack>> {
                     let client = lyrics::get_client().ok()?;
                     let response = client.get(url).send().await.ok()?;
                     if response.status().is_success() {
-                        Some(BASE64_STANDARD.encode(response.bytes().await.ok()?))
+                        Some(response.bytes().await.ok()?.to_vec())
                     } else {
                         None
                     }
@@ -153,7 +151,7 @@ pub async fn download_track(id: &str, output_path: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn download_track_default(id: &str) -> Result<Track> {
+pub async fn query_track(id: &str) -> Result<Track> {
     let client = get_client();
     let track = client.query().music_details(id).await?;
     let mut covers = track.track.cover.clone();
@@ -163,7 +161,7 @@ pub async fn download_track_default(id: &str) -> Result<Track> {
             let client = lyrics::get_client()?;
             let response = client.get(&cover.url).send().await?;
             if response.status().is_success() {
-                Some(BASE64_STANDARD.encode(response.bytes().await?))
+                Some(response.bytes().await?.to_vec())
             } else {
                 None
             }
@@ -171,33 +169,55 @@ pub async fn download_track_default(id: &str) -> Result<Track> {
         None => None,
     };
     let id = Ulid::new().to_string();
+    let artists: Vec<Artist> = track.track.artists.iter().map(|a| Artist::new(a.name.clone())).collect();
+    let track = Track {
+        id,
+        title: track.track.name,
+        album: track.track.album.as_ref().map(|a| Album::new(a.name.clone(), artists.first().cloned().into_iter().collect(), None, album_cover))
+        .unwrap_or(Album::new("Unknown Album".to_string(), artists.first().cloned().into_iter().collect(), None, None)),
+        artists,
+        duration: track.track.duration.unwrap_or(0) as f64,
+        path: None,
+        source_id: Some(track.track.id),
+        source: TrackSource::YouTube,
+        track_number: None
+    };
+    Ok(track)
+}
+
+pub async fn get_or_query_track(id: &str) -> Result<Track> {
+    let library = LIBRARY.get().ok_or(anyhow::anyhow!("Library not initialized"))?;
+    if let Some(track) = library.find_track_by_source(TrackSource::YouTube, id).await? {
+        Ok(track)
+    } else {
+        let track = query_track(id).await?;
+        Ok(track)
+    }
+}
+
+pub async fn get_default_download_path(id: &str) -> Result<String> {
     let data = dirs::config_dir().ok_or(anyhow::anyhow!("Could not find config directory"))?;
     let path = data
         .join("Vibrance")
         .join("yt_tracks")
         .join(format!("{}.m4a", id));
-    std::fs::create_dir_all(
+    fs::create_dir_all(
         path.parent()
             .ok_or(anyhow::anyhow!("Could not find parent directory"))?,
-    )?;
-    let path = path.to_str().unwrap().to_string();
-    download_track(&track.track.id, &path).await?;
-    let track = Track {
-        id,
-        title: Some(track.track.name),
-        artists: track.track.artists.iter().map(|a| a.name.clone()).collect(),
-        album: track.track.album.as_ref().map(|a| a.name.clone()),
-        album_art: album_cover,
-        duration: track.track.duration.unwrap_or(0) as f64,
-        path: Some(path),
-        yt_id: Some(track.track.id),
+    ).await?;
+    let path = path.to_str().ok_or(anyhow::anyhow!("Invalid path"))?;
+    Ok(path.to_string())
+}
+
+pub async fn download_track_and_save(track: &Track, path: &str) -> Result<()> {
+    if track.source != TrackSource::YouTube {
+        return Err(anyhow::anyhow!("Track is not a YouTube track"));
+    }
+    let Some(video_id) = track.source_id.as_ref() else {
+        return Err(anyhow::anyhow!("Track does not have a YouTube ID"));
     };
-    let mut preferences = PREFERENCES
-        .get()
-        .ok_or(anyhow::anyhow!("Preferences not initialized"))?
-        .write()
-        .await;
-    preferences.add_unorganized_track(track.clone());
-    drop(preferences);
-    Ok(track)
+    download_track(video_id, &path).await?;
+    let library = LIBRARY.get().ok_or(anyhow::anyhow!("Library not initialized"))?;
+    library.add_track(&track).await?;
+    Ok(())
 }

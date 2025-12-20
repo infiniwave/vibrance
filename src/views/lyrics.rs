@@ -5,9 +5,10 @@ use gpui::{AppContext, InteractiveElement, IntoElement, ParentElement, Render, S
 use gpui_component::StyledExt;
 use tokio::task;
 
+use crate::library::Track;
 use crate::{
     lyrics::{LyricLine, LyricSource},
-    player::{PLAYER, PlayerEvent, Track},
+    player::{PLAYER, PlayerEvent},
     providers::qq::QQProvider,
 };
 
@@ -49,9 +50,9 @@ impl LyricsView {
                                     let artist = track_clone
                                         .artists
                                         .first()
-                                        .map(|s| s.as_str())
+                                        .map(|a| a.name.as_str())
                                         .unwrap_or("");
-                                    let title = track_clone.title.as_deref().unwrap_or("");
+                                    let title = track_clone.title.as_str();
 
                                     QQProvider::fetch_lyrics(artist, title).await
                                 })
@@ -157,8 +158,8 @@ impl Render for LyricsView {
                         .text_color(gpui::rgb(0x888888))
                         .child(format!(
                             "{} - {}",
-                            track.title.as_deref().unwrap_or("Unknown"),
-                            track.artists.join(", ")
+                            track.title,
+                            track.artists_string()
                         )),
                 )
             })

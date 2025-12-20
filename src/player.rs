@@ -1,16 +1,8 @@
 use std::{fs::File, path::PathBuf, time::Duration};
 
-use anyhow::Result;
-use base64::{Engine, prelude::BASE64_STANDARD};
 use chrono::Utc;
-use lofty::{
-    file::{AudioFile, TaggedFileExt},
-    probe::Probe,
-    tag::ItemKey,
-};
 use once_cell::sync::OnceCell;
 use rodio::{Decoder, OutputStreamBuilder, Sink, Source};
-use serde::{Deserialize, Serialize};
 use tokio::{
     sync::{
         broadcast::{Receiver, Sender, channel},
@@ -18,9 +10,8 @@ use tokio::{
     },
     task, time,
 };
-use ulid::Ulid;
 
-use crate::preferences::PREFERENCES;
+use crate::{library::Track, preferences::PREFERENCES};
 
 /// Global player instance
 pub static PLAYER: OnceCell<Player> = OnceCell::new();
@@ -147,16 +138,14 @@ impl Player {
                                         println!("Failed to send track loaded event");
                                         0
                                     });
-                                let Some(ref path) = track.path else {
-                                    println!("Track path is None, skipping playback");
-                                    continue;
+                                let source = track.load().await;
+                                let source = match source {
+                                    Ok(source) => source,
+                                    Err(e) => {
+                                        println!("Failed to load track source: {:?}", e);
+                                        continue;
+                                    }
                                 };
-                                if !PathBuf::from(&path).exists() {
-                                    println!("Track file does not exist: {}", path);
-                                    continue;
-                                }
-                                let file = File::open(&path).unwrap();
-                                let source = Decoder::try_from(file).unwrap();
                                 current_duration = source
                                     .total_duration()
                                     .map(|d| d.as_secs_f32())
@@ -358,48 +347,48 @@ impl Player {
     pub fn out_evt_receiver(&self) -> Receiver<PlayerEvent> {
         self.in_evt.subscribe()
     }
-
-    pub fn resolve_track(&self, path: String) -> Result<Track> {
-        if path.is_empty() {
-            return Err(anyhow::anyhow!("Path is empty"));
-        }
-        let path = PathBuf::from(path);
-        if !path.exists() {
-            return Err(anyhow::anyhow!("File does not exist: {}", path.display()));
-        }
-        let tag = Probe::open(&path)?.read()?;
-        let properties = tag.properties();
-        let tag = match tag.primary_tag() {
-            Some(primary_tag) => Some(primary_tag),
-            None => tag.first_tag(),
-        };
-        let id = Ulid::new().to_string();
-        let mut artists = tag.map_or_else(Vec::new, |t| {
-            t.get_strings(&ItemKey::TrackArtists)
-                .map(String::from)
-                .collect()
-        });
-        if artists.is_empty() {
-            let artist = tag.and_then(|t| t.get_string(&ItemKey::TrackArtist).map(String::from));
-            if let Some(artist) = artist {
-                artists.push(artist);
-            }
-        }
-        let album_art = tag
-            .and_then(|t| t.pictures().get(0))
-            .map(|p| p.data())
-            .map(|d| BASE64_STANDARD.encode(d));
-        Ok(Track {
-            id,
-            title: tag.and_then(|t| t.get_string(&ItemKey::TrackTitle).map(String::from)),
-            artists,
-            album: tag.and_then(|t| t.get_string(&ItemKey::AlbumTitle).map(String::from)),
-            album_art,
-            duration: properties.duration().as_secs_f64(),
-            path: Some(path.to_string_lossy().to_string()),
-            yt_id: None,
-        })
-    }
+    // TODO: add Local resolver
+    // pub fn resolve_track(&self, path: String) -> Result<Track> {
+    //     if path.is_empty() {
+    //         return Err(anyhow::anyhow!("Path is empty"));
+    //     }
+    //     let path = PathBuf::from(path);
+    //     if !path.exists() {
+    //         return Err(anyhow::anyhow!("File does not exist: {}", path.display()));
+    //     }
+    //     let tag = Probe::open(&path)?.read()?;
+    //     let properties = tag.properties();
+    //     let tag = match tag.primary_tag() {
+    //         Some(primary_tag) => Some(primary_tag),
+    //         None => tag.first_tag(),
+    //     };
+    //     let id = Ulid::new().to_string();
+    //     let mut artists = tag.map_or_else(Vec::new, |t| {
+    //         t.get_strings(&ItemKey::TrackArtists)
+    //             .map(String::from)
+    //             .collect()
+    //     });
+    //     if artists.is_empty() {
+    //         let artist = tag.and_then(|t| t.get_string(&ItemKey::TrackArtist).map(String::from));
+    //         if let Some(artist) = artist {
+    //             artists.push(artist);
+    //         }
+    //     }
+    //     let album_art = tag
+    //         .and_then(|t| t.pictures().get(0))
+    //         .map(|p| p.data())
+    //         .map(|d| BASE64_STANDARD.encode(d));
+    //     Ok(Track {
+    //         id,
+    //         title: tag.and_then(|t| t.get_string(&ItemKey::TrackTitle).map(String::from)),
+    //         artists,
+    //         album: tag.and_then(|t| t.get_string(&ItemKey::AlbumTitle).map(String::from)),
+    //         album_art,
+    //         duration: properties.duration().as_secs_f64(),
+    //         path: Some(path.to_string_lossy().to_string()),
+    //         yt_id: None,
+    //     })
+    // }
 
     pub fn clear_queue(&self) {
         self.in_cmd
@@ -414,16 +403,4 @@ impl Player {
             .expect("Failed to send set repeat command");
         println!("Repeat mode set.");
     }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-pub struct Track {
-    pub id: String,
-    pub title: Option<String>,
-    pub artists: Vec<String>,
-    pub album: Option<String>,
-    pub album_art: Option<String>, // base64 encoded image data
-    pub duration: f64,
-    pub path: Option<String>,
-    pub yt_id: Option<String>,
 }

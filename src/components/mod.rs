@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use base64::{Engine, prelude::BASE64_STANDARD};
 use gpui::{App, Image, ImageCacheError, ImageFormat, RenderImage, SharedString, Window};
 
 pub mod icon;
@@ -13,9 +12,8 @@ pub mod track_list_item;
 pub fn render_image(
     w: &mut Window,
     a: &mut App,
-    image: &String,
+    bytes: Vec<u8>,
 ) -> Result<Arc<RenderImage>, ImageCacheError> {
-    let bytes = BASE64_STANDARD.decode(image).unwrap();
     // detect image format from magic bytes
     let format = if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
         ImageFormat::Png

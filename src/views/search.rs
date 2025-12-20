@@ -12,14 +12,12 @@ use crate::{
         icon::Icon,
         player::Player as PlayerComponent,
         track_list::{TrackList, TrackListDelegate},
-    },
-    player::{PLAYER, Track},
-    providers,
+    }, library::Track, player::PLAYER, providers::{self, youtube::{self, YtTrack}}
 };
 
 pub struct SearchView {
     input_state: Entity<InputState>,
-    track_list: Entity<TrackList>,
+    track_list: Entity<TrackList<YtTrack>>,
     _s: Vec<Subscription>,
 }
 
@@ -31,25 +29,13 @@ impl SearchView {
     ) -> Self {
         let input_state = cx.new(|cx| InputState::new(window, cx).placeholder("Search..."));
 
-        let on_play_callback: Arc<dyn Fn(Track) + Send + Sync> = Arc::new(move |track: Track| {
+        let on_play_callback: Arc<dyn Fn(YtTrack) + Send + Sync> = Arc::new(move |track: YtTrack| {
             task::spawn(async move {
-                let track = if track.yt_id.is_some() && track.path.is_none() {
-                    println!("Downloading YouTube track: {:?}", track.yt_id);
-                    match providers::youtube::download_track_default(
-                        track.yt_id.as_ref().unwrap(),
-                    )
-                    .await
-                    {
-                        Ok(downloaded_track) => downloaded_track,
-                        Err(e) => {
-                            eprintln!("Failed to download track: {}", e);
-                            return;
-                        }
-                    }
-                } else {
-                    track
+                let resolved_track = youtube::query_track(&track.id).await;
+                let Ok(track) = resolved_track else {
+                    eprintln!("Failed to query track details for id: {}", track.id);
+                    return;
                 };
-
                 if let Some(player) = PLAYER.get() {
                     println!("Playing track: {:?}", track.title);
                     player.clear_queue();
@@ -61,16 +47,7 @@ impl SearchView {
             });
         });
 
-        let initial_delegate = TrackListDelegate::new(vec![Track {
-            album: None,
-            album_art: None,
-            artists: vec![],
-            duration: 0.0,
-            id: "".to_string(),
-            path: None,
-            title: Some("No results".to_string()),
-            yt_id: None,
-        }])
+        let initial_delegate = TrackListDelegate::new(vec![])
         .with_on_play(on_play_callback.clone());
 
         let track_list = cx.new(|cx| TrackList::new(window, cx, initial_delegate));
@@ -97,22 +74,9 @@ impl SearchView {
                             match search_result {
                                 Ok(Ok(tracks)) => {
                                     println!("Found {} tracks", tracks.len());
-                                    let items = tracks
-                                        .iter()
-                                        .map(|t| Track {
-                                            title: Some(t.title.clone()),
-                                            artists: vec![t.artist.clone()],
-                                            album: Some(t.album.clone()),
-                                            album_art: t.album_art.clone(),
-                                            duration: t.duration as f64,
-                                            id: t.id.clone(),
-                                            yt_id: Some(t.id.clone()),
-                                            path: None,
-                                        })
-                                        .collect::<Vec<_>>();
                                     // update the track list delegate with the callback
                                     let new_delegate =
-                                        TrackListDelegate::new(items).with_on_play(on_play);
+                                        TrackListDelegate::new(tracks).with_on_play(on_play);
                                     app.update_entity(&y, |e, cx| {
                                         e.update_delegate(cx, new_delegate)
                                     })

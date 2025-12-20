@@ -7,6 +7,7 @@ pub mod preferences;
 pub mod providers;
 pub mod resources;
 pub mod views;
+pub mod library;
 
 use std::{path::PathBuf, time::Duration};
 
@@ -21,10 +22,7 @@ use tokio::{
 };
 
 use crate::{
-    components::sidebar::NavigationState,
-    player::{PLAYER, Player, PlayerEvent},
-    preferences::{PREFERENCES, read_preferences},
-    resources::Resources,
+    components::sidebar::NavigationState, library::{LIBRARY, Library}, player::{PLAYER, Player, PlayerEvent}, preferences::{PREFERENCES, read_preferences}, resources::Resources
 };
 
 pub struct App {
@@ -108,6 +106,10 @@ async fn main() {
         .set(RwLock::new(preferences))
         .expect("Failed to set preferences");
     println!("Preferences loaded successfully.");
+    library::get_library()
+        .await
+        .expect("Failed to initialize library");
+    println!("Library initialized successfully.");
     task::spawn(async move {
         let preferences = PREFERENCES
             .get()
@@ -118,6 +120,10 @@ async fn main() {
         drop(preferences);
         loop {
             time::sleep(std::time::Duration::from_secs(60)).await;
+            let library = LIBRARY
+                .get()
+                .expect("Library not initialized");
+            library.write().expect("Failed to write library to disk");
             let preferences = PREFERENCES
                 .get()
                 .expect("Preferences not initialized")
@@ -157,24 +163,20 @@ async fn main() {
                     #[cfg(target_os = "windows")]
                     {
                         // On Windows, also set the album art if available
-                        if let Some(ref album_art) = track.album_art {
-                            use base64::{Engine, prelude::BASE64_STANDARD};
+                        if let Some(ref album_art) = track.album.album_art {
                             use souvlaki::platform::windows::WindowsCover;
-                            let cover = BASE64_STANDARD
-                                .decode(album_art)
-                                .expect("Failed to decode album art");
-                            controls.set_cover(Some(WindowsCover::Bytes(cover))).
+                            controls.set_cover(Some(WindowsCover::Bytes(album_art.clone()))).
                                 unwrap_or_else(|e| {
                                     eprintln!("Failed to set album art: {:?}", e);
                                 });
                         }
                     }
                     let c = controls.set_metadata(MediaMetadata {
-                        title: Some(track.title.as_deref().unwrap_or("Unknown Title").to_string()),
-                        album_title: Some(track.album.as_deref().unwrap_or("Unknown Album").to_string()),    
+                        title: Some(track.title.to_string()),
+                        album_title: Some(track.album.to_string()),    
                         duration: Some(Duration::from_secs_f64(track.duration)),
-                        artist: Some(track.artists.join(", ")),
-                        artists: Some(track.artists),
+                        artist: Some(track.artists_string()),
+                        artists: Some(track.artists.iter().map(|a| a.to_string()).collect()),
                         ..Default::default()
                     });
                     if let Err(e) = c {
@@ -248,6 +250,10 @@ async fn main() {
                     let rt = tokio::runtime::Handle::current();
                     rt.block_on(async {
                         // Save preferences before exiting
+                        let library = LIBRARY
+                            .get()
+                            .expect("Library not initialized");
+                        library.write().expect("Failed to write library to disk");
                         if let Some(preferences_mutex) = PREFERENCES.get() {
                             let preferences = preferences_mutex.read().await;
                             if let Err(e) = preferences.save().await {

@@ -11,20 +11,28 @@ use gpui_component::{
 };
 
 use crate::{
-    components::{icon::Icon, render_image},
-    player::Track,
+    components::{icon::Icon, render_image}, library::Track, providers::youtube::YtTrack,
 };
 
-pub type OnPlayCallback = Arc<dyn Fn(Track) + Send + Sync>;
+pub type OnPlayCallback<T> = Arc<dyn Fn(T) + Send + Sync>;
 
-pub struct TrackListDelegate {
-    items: Vec<Track>,
-    selected_index: Option<IndexPath>,
-    on_play: Option<OnPlayCallback>,
+/// This is necessary because we want to be able to use full `Track`s as well as
+/// other types that represent tracks (e.g. search results) in the TrackListDelegate.
+pub trait RenderedTrack: Clone + 'static {
+    fn artists_string(&self) -> String;
+    fn id(&self) -> String;
+    fn title(&self) -> String;
+    fn album_art(&self) -> Option<Vec<u8>>;
 }
 
-impl TrackListDelegate {
-    pub fn new(items: Vec<Track>) -> Self {
+pub struct TrackListDelegate<T: RenderedTrack> {
+    items: Vec<T>,
+    selected_index: Option<IndexPath>,
+    on_play: Option<OnPlayCallback<T>>,
+}
+
+impl<T: RenderedTrack> TrackListDelegate<T> {
+    pub fn new(items: Vec<T>) -> Self {
         Self {
             items,
             selected_index: None,
@@ -32,19 +40,19 @@ impl TrackListDelegate {
         }
     }
 
-    pub fn with_on_play(mut self, callback: OnPlayCallback) -> Self {
+    pub fn with_on_play(mut self, callback: OnPlayCallback<T>) -> Self {
         self.on_play = Some(callback);
         self
     }
 }
-
-impl From<Vec<Track>> for TrackListDelegate {
-    fn from(items: Vec<Track>) -> Self {
+    
+impl<T: RenderedTrack> From<Vec<T>> for TrackListDelegate<T> {
+    fn from(items: Vec<T>) -> Self {
         Self::new(items)
     }
 }
 
-impl ListDelegate for TrackListDelegate {
+impl<T: RenderedTrack> ListDelegate for TrackListDelegate<T> {
     type Item = ListItem;
 
     fn items_count(&self, _section: usize, _cx: &gpui::App) -> usize {
@@ -58,12 +66,12 @@ impl ListDelegate for TrackListDelegate {
         _cx: &mut gpui::Context<ListState<Self>>,
     ) -> Option<Self::Item> {
         self.items.get(ix.row).map(|track| {
-            let aa = track.album_art.clone();
+            let aa = track.album_art();
             let track_for_click = track.clone();
             let on_play = self.on_play.clone();
-            let title = track.title.as_deref().unwrap_or("Unknown Title");
-            let artists = track.artists.join(", ");
-            let track_id = track.id.clone();
+            let title = track.title();
+            let artists = track.artists_string();
+            let track_id = track.id();
             //println!("Rendering track at index {}: {:?}", ix.row, track);
             ListItem::new(ix)
                 .child(
@@ -78,8 +86,8 @@ impl ListDelegate for TrackListDelegate {
                                 .child(
                                     img(ImageSource::Custom(Arc::new(move |w, a| {
                                         // album_art is base64
-                                        if let Some(ref album_art) = aa {
-                                            Some(render_image(w, a, album_art))
+                                        if let Some(album_art) = &aa {
+                                            Some(render_image(w, a, album_art.clone()))
                                         } else {
                                             None
                                         }
@@ -127,14 +135,14 @@ impl ListDelegate for TrackListDelegate {
     }
 }
 
-pub struct TrackList {
-    pub list_state: Entity<ListState<TrackListDelegate>>,
+pub struct TrackList<T: RenderedTrack> {
+    pub list_state: Entity<ListState<TrackListDelegate<T>>>,
 }
-impl TrackList {
+impl<T: RenderedTrack> TrackList<T> {
     pub fn new(
         window: &mut gpui::Window,
         cx: &mut gpui::Context<Self>,
-        delegate: TrackListDelegate,
+        delegate: TrackListDelegate<T>,
     ) -> Self {
         let list_state = cx.new(|cx| ListState::new(delegate, window, cx));
         Self { list_state }
@@ -142,20 +150,16 @@ impl TrackList {
     pub fn update_delegate(
         &self,
         cx: &mut gpui::Context<'_, Self>,
-        new_delegate: TrackListDelegate,
+        new_delegate: TrackListDelegate<T>,
     ) {
         self.list_state.update(cx, |t, cx| {
-            println!(
-                "TrackList delegate updated with {:?} items",
-                new_delegate.items
-            );
             *t.delegate_mut() = new_delegate;
             cx.notify();
         });
     }
 }
 
-impl Render for TrackList {
+impl<T: RenderedTrack> Render for TrackList<T> {
     fn render(
         &mut self,
         window: &mut gpui::Window,
@@ -165,5 +169,41 @@ impl Render for TrackList {
             .bg(rgba(0x00000000)) // 9f
             .h_full()
             .child(List::new(&self.list_state))
+    }
+}
+
+impl RenderedTrack for Track {
+    fn artists_string(&self) -> String {
+        self.artists_string()
+    }
+
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn title(&self) -> String {
+        self.title.clone()
+    }
+
+    fn album_art(&self) -> Option<Vec<u8>> {
+        self.album.album_art.clone()
+    }
+}
+
+impl RenderedTrack for YtTrack {
+    fn artists_string(&self) -> String {
+        self.artist.clone()
+    }
+
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn title(&self) -> String {
+        self.title.clone()
+    }
+
+    fn album_art(&self) -> Option<Vec<u8>> {
+        self.album_art.clone()
     }
 }

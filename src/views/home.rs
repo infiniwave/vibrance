@@ -5,37 +5,17 @@ use gpui_component::StyledExt;
 use tokio::task;
 
 use crate::{
-    components::track_list::{TrackList, TrackListDelegate},
-    player::{PLAYER, Track},
-    preferences::PREFERENCES,
-    providers,
+    components::track_list::{TrackList, TrackListDelegate}, library::{LIBRARY, Track}, player::PLAYER, preferences::PREFERENCES, providers
 };
 
 pub struct HomeView {
-    track_list: Entity<TrackList>,
+    track_list: Entity<TrackList<Track>>,
 }
 
 impl HomeView {
     pub fn new(window: &mut gpui::Window, cx: &mut gpui::Context<Self>) -> Self {
         let on_play_callback: Arc<dyn Fn(Track) + Send + Sync> = Arc::new(move |track: Track| {
             task::spawn(async move {
-                let track = if track.yt_id.is_some() && track.path.is_none() {
-                    println!("Downloading YouTube track: {:?}", track.yt_id);
-                    match providers::youtube::download_track_default(
-                        track.yt_id.as_ref().unwrap(),
-                    )
-                    .await
-                    {
-                        Ok(downloaded_track) => downloaded_track,
-                        Err(e) => {
-                            eprintln!("Failed to download track: {}", e);
-                            return;
-                        }
-                    }
-                } else {
-                    track
-                };
-
                 if let Some(player) = PLAYER.get() {
                     println!("Playing track: {:?}", track.title);
                     player.clear_queue();
@@ -56,14 +36,14 @@ impl HomeView {
         let on_play_for_load = on_play_callback.clone();
         cx.spawn(async move |_, app| {
             let tracks = task::spawn(async move {
-                if let Some(prefs) = PREFERENCES.get() {
-                    let prefs = prefs.read().await;
-                    prefs.all_tracks().into_iter().cloned().collect()
-                } else {
-                    vec![]
-                }
+                let library = LIBRARY
+                    .get()
+                    .ok_or(anyhow::anyhow!("Library not initialized"))?;
+                Ok(library.all_tracks().await?)
             })
             .await
+            .map_err(|e| anyhow::anyhow!("Failed to join task: {}", e))
+            .flatten()
             .unwrap_or_default();
 
             let new_delegate = TrackListDelegate::new(tracks).with_on_play(on_play_for_load);
