@@ -37,7 +37,7 @@ impl SearchView {
         let on_play_callback: Arc<dyn Fn(YtTrack) + Send + Sync> =
             Arc::new(move |track: YtTrack| {
                 task::spawn(async move {
-                    let resolved_track = youtube::query_track(&track.id).await;
+                    let resolved_track = youtube::get_or_query_track(&track.id).await;
                     let Ok(track) = resolved_track else {
                         eprintln!("Failed to query track details for id: {}", track.id);
                         return;
