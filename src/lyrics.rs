@@ -2,6 +2,8 @@ use anyhow::Result;
 use once_cell::sync::OnceCell;
 use reqwest::Client;
 
+pub mod qq;
+
 #[derive(Debug, Clone)]
 pub struct LyricLine {
     pub timestamp: f64, // ms

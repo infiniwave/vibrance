@@ -12,7 +12,7 @@ use crate::library::Track;
 use crate::{
     lyrics::{LyricLine, LyricSource},
     player::{PLAYER, PlayerEvent},
-    providers::qq::QQProvider,
+    lyrics::qq::QQProvider,
 };
 
 pub struct LyricsView {
