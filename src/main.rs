@@ -80,6 +80,11 @@ impl Render for App {
             .text_color(rgb(16777215))
             .v_flex()
             .size_full()
+            .child(TitleBar::new().child(div()
+                .h_flex()
+                .gap_2()
+                .child(img("svg/app.svg").size(px(16.0)))
+                .child("Vibrance")))
             .child(
                 div()
                     .h_flex()
@@ -241,7 +246,6 @@ async fn main() {
         .expect("Missing font")
         .expect("Missing font");
     let app = Application::new()
-        .with_assets(Assets)
         .with_assets(resources);
     app.text_system()
         .add_fonts(vec![dm_sans, dm_sans_italic])
@@ -286,8 +290,9 @@ async fn main() {
         cx.open_window(
             WindowOptions {
                 titlebar: Some(TitlebarOptions {
-                    title: Some(SharedString::new("Vibrance")),
-                    ..Default::default()
+                    title: Some("Vibrance".into()),
+                    appears_transparent: true,
+                    traffic_light_position: Some(gpui::point(px(9.0), px(9.0))),
                 }),
                 window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
                     None,
