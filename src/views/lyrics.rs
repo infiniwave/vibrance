@@ -10,9 +10,9 @@ use tokio::task;
 
 use crate::library::Track;
 use crate::{
+    lyrics::qq::QQProvider,
     lyrics::{LyricLine, LyricSource},
     player::{PLAYER, PlayerEvent},
-    lyrics::qq::QQProvider,
 };
 
 pub struct LyricsView {

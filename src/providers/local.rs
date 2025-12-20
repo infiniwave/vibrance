@@ -1,6 +1,10 @@
 use std::path::PathBuf;
 
-use lofty::{file::{AudioFile, TaggedFileExt}, probe::Probe, tag::ItemKey};
+use lofty::{
+    file::{AudioFile, TaggedFileExt},
+    probe::Probe,
+    tag::ItemKey,
+};
 use ulid::Ulid;
 
 use crate::library::{Album, Artist, Track, TrackSource};
@@ -34,12 +38,10 @@ pub fn resolve_track(path: &str) -> anyhow::Result<Track> {
     let album_art = tag
         .and_then(|t| t.pictures().get(0))
         .map(|p| p.data().to_vec());
-    let album = tag.map(|t| {
-        t
-            .get_string(&ItemKey::AlbumTitle)
-            .map(String::from)
-            
-    }).flatten().unwrap_or("Unknown Album".to_string());
+    let album = tag
+        .map(|t| t.get_string(&ItemKey::AlbumTitle).map(String::from))
+        .flatten()
+        .unwrap_or("Unknown Album".to_string());
     let release_year = tag.and_then(|t| {
         t.get_string(&ItemKey::Year)
             .and_then(|date_str| date_str.get(0..4))
@@ -48,13 +50,22 @@ pub fn resolve_track(path: &str) -> anyhow::Result<Track> {
     let artists: Vec<Artist> = artists.iter().map(|a| Artist::new(a.to_string())).collect();
     Ok(Track {
         id,
-        title: tag.and_then(|t| t.get_string(&ItemKey::TrackTitle).map(String::from)).unwrap_or_else(|| path.file_stem().unwrap().to_string_lossy().to_string()),
-        album: Album::new(album,artists.first().into_iter().cloned().collect(), release_year,album_art),
+        title: tag
+            .and_then(|t| t.get_string(&ItemKey::TrackTitle).map(String::from))
+            .unwrap_or_else(|| path.file_stem().unwrap().to_string_lossy().to_string()),
+        album: Album::new(
+            album,
+            artists.first().into_iter().cloned().collect(),
+            release_year,
+            album_art,
+        ),
         artists,
         duration: properties.duration().as_secs_f64(),
         path: Some(path.to_string_lossy().to_string()),
         source: TrackSource::Local,
         source_id: None,
-        track_number: tag.and_then(|t| t.get_string(&ItemKey::TrackNumber).map(|i| i.parse().ok())).flatten(),
+        track_number: tag
+            .and_then(|t| t.get_string(&ItemKey::TrackNumber).map(|i| i.parse().ok()))
+            .flatten(),
     })
 }
