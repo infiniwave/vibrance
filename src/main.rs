@@ -1,13 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 pub mod components;
 pub mod controls;
+pub mod library;
 pub mod lyrics;
 pub mod player;
 pub mod preferences;
 pub mod providers;
 pub mod resources;
 pub mod views;
-pub mod library;
 
 use std::{path::PathBuf, time::Duration};
 
@@ -22,7 +22,11 @@ use tokio::{
 };
 
 use crate::{
-    components::sidebar::NavigationState, library::{LIBRARY, Library}, player::{PLAYER, Player, PlayerEvent}, preferences::{PREFERENCES, read_preferences}, resources::Resources
+    components::sidebar::NavigationState,
+    library::LIBRARY,
+    player::{PLAYER, Player, PlayerEvent},
+    preferences::{PREFERENCES, read_preferences},
+    resources::Resources,
 };
 
 pub struct App {
@@ -120,9 +124,7 @@ async fn main() {
         drop(preferences);
         loop {
             time::sleep(std::time::Duration::from_secs(60)).await;
-            let library = LIBRARY
-                .get()
-                .expect("Library not initialized");
+            let library = LIBRARY.get().expect("Library not initialized");
             library.write().expect("Failed to write library to disk");
             let preferences = PREFERENCES
                 .get()
@@ -165,15 +167,16 @@ async fn main() {
                         // On Windows, also set the album art if available
                         if let Some(ref album_art) = track.album.album_art {
                             use souvlaki::platform::windows::WindowsCover;
-                            controls.set_cover(Some(WindowsCover::Bytes(album_art.clone()))).
-                                unwrap_or_else(|e| {
+                            controls
+                                .set_cover(Some(WindowsCover::Bytes(album_art.clone())))
+                                .unwrap_or_else(|e| {
                                     eprintln!("Failed to set album art: {:?}", e);
                                 });
                         }
                     }
                     let c = controls.set_metadata(MediaMetadata {
                         title: Some(track.title.to_string()),
-                        album_title: Some(track.album.to_string()),    
+                        album_title: Some(track.album.to_string()),
                         duration: Some(Duration::from_secs_f64(track.duration)),
                         artist: Some(track.artists_string()),
                         artists: Some(track.artists.iter().map(|a| a.to_string()).collect()),
@@ -250,9 +253,7 @@ async fn main() {
                     let rt = tokio::runtime::Handle::current();
                     rt.block_on(async {
                         // Save preferences before exiting
-                        let library = LIBRARY
-                            .get()
-                            .expect("Library not initialized");
+                        let library = LIBRARY.get().expect("Library not initialized");
                         library.write().expect("Failed to write library to disk");
                         if let Some(preferences_mutex) = PREFERENCES.get() {
                             let preferences = preferences_mutex.read().await;
@@ -270,27 +271,34 @@ async fn main() {
         })
         .detach();
 
-        cx.open_window(WindowOptions {
-            titlebar: Some(TitlebarOptions {
-                title: Some(SharedString::new("Vibrance")),
+        cx.open_window(
+            WindowOptions {
+                titlebar: Some(TitlebarOptions {
+                    title: Some(SharedString::new("Vibrance")),
+                    ..Default::default()
+                }),
+                window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                    None,
+                    size(px(900.0), px(700.0)),
+                    cx,
+                ))),
                 ..Default::default()
-            }),
-            window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(900.0), px(700.0)), cx))),
-            ..Default::default()
-        }, |window, cx| {
-            let view = cx.new(|cx| App::new(window, cx));
-            if use_system_controls {
-                let controls =
-                    controls::initialize(window).expect("Failed to initialize media controls");
-                let controls_mutex = Mutex::new(controls);
-                CONTROLS
-                    .set(controls_mutex)
-                    .expect("Failed to initialize media controls");
-                println!("Media controls initialized successfully.");
-            }
-            // This first level on the window, should be a Root.
-            cx.new(|cx| Root::new(view, window, cx))
-        })
+            },
+            |window, cx| {
+                let view = cx.new(|cx| App::new(window, cx));
+                if use_system_controls {
+                    let controls =
+                        controls::initialize(window).expect("Failed to initialize media controls");
+                    let controls_mutex = Mutex::new(controls);
+                    CONTROLS
+                        .set(controls_mutex)
+                        .expect("Failed to initialize media controls");
+                    println!("Media controls initialized successfully.");
+                }
+                // This first level on the window, should be a Root.
+                cx.new(|cx| Root::new(view, window, cx))
+            },
+        )
         .ok();
     });
 }

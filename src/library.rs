@@ -75,7 +75,6 @@ CREATE INDEX IF NOT EXISTS idx_album_artists_artist ON album_artists(artist_id);
 CREATE INDEX IF NOT EXISTS idx_track_artists_artist ON track_artists(artist_id);
 "#;
 
-/// Source of a track (local file or online provider)
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub enum TrackSource {
     Local,
@@ -99,7 +98,6 @@ impl TrackSource {
     }
 }
 
-/// A track in the library
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct Track {
     pub id: String,
@@ -114,49 +112,6 @@ pub struct Track {
 }
 
 impl Track {
-    /// Create a new local track
-    pub fn new_local(
-        title: String,
-        artists: Vec<Artist>,
-        album: Album,
-        duration: f64,
-        path: String,
-        track_number: Option<i32>,
-    ) -> Self {
-        Self {
-            id: Ulid::new().to_string(),
-            title,
-            artists,
-            album,
-            duration,
-            path: Some(path),
-            source: TrackSource::Local,
-            source_id: None,
-            track_number,
-        }
-    }
-
-    /// Create a new YouTube track
-    pub fn new_youtube(
-        title: String,
-        artists: Vec<Artist>,
-        album: Album,
-        duration: f64,
-        yt_id: String,
-    ) -> Self {
-        Self {
-            id: Ulid::new().to_string(),
-            title,
-            artists,
-            album,
-            duration,
-            path: None,
-            source: TrackSource::YouTube,
-            source_id: Some(yt_id),
-            track_number: None,
-        }
-    }
-
     pub fn artists_string(&self) -> String {
         self.artists
             .iter()
@@ -166,7 +121,6 @@ impl Track {
     }
 }
 
-/// An artist in the library
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct Artist {
     pub id: String,
@@ -188,7 +142,6 @@ impl ToString for Artist {
     }
 }
 
-/// An album in the library
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct Album {
     pub id: String,
@@ -199,7 +152,12 @@ pub struct Album {
 }
 
 impl Album {
-    pub fn new(title: String, artists: Vec<Artist>, release_year: Option<i32>, album_art: Option<Vec<u8>>) -> Self {
+    pub fn new(
+        title: String,
+        artists: Vec<Artist>,
+        release_year: Option<i32>,
+        album_art: Option<Vec<u8>>,
+    ) -> Self {
         Self {
             id: Ulid::new().to_string(),
             title,
@@ -216,7 +174,6 @@ impl ToString for Album {
     }
 }
 
-/// A playlist in the library
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct Playlist {
     pub id: String,
@@ -253,14 +210,11 @@ impl Library {
                 .ok_or(anyhow::anyhow!("Could not find parent directory"))?,
         )
         .await?;
-        let connection = Builder::new_local(
-            db_path
-                .to_str()
-                .ok_or(anyhow::anyhow!("Invalid path"))?,
-        )
-        .build()
-        .await?
-        .connect()?;
+        let connection =
+            Builder::new_local(db_path.to_str().ok_or(anyhow::anyhow!("Invalid path"))?)
+                .build()
+                .await?
+                .connect()?;
         connection
             .execute_batch(CREATE_DB)
             .await
@@ -275,7 +229,6 @@ impl Library {
 
     /// Add an artist to the library, returns the artist (with existing id if already exists)
     pub async fn add_artist(&self, artist: &Artist) -> anyhow::Result<Artist> {
-        // Check if artist already exists by name
         if let Some(existing) = self.find_artist_by_name(&artist.name).await? {
             return Ok(existing);
         }
@@ -302,9 +255,17 @@ impl Library {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to query artist: {}", e))?;
 
-        if let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
-            let id: String = row.get(0).map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let name: String = row.get(1).map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
+        if let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
+            let id: String = row
+                .get(0)
+                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
+            let name: String = row
+                .get(1)
+                .map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
             Ok(Some(Artist { id, name }))
         } else {
             Ok(None)
@@ -319,9 +280,17 @@ impl Library {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to query artist: {}", e))?;
 
-        if let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
-            let id: String = row.get(0).map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let name: String = row.get(1).map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
+        if let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
+            let id: String = row
+                .get(0)
+                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
+            let name: String = row
+                .get(1)
+                .map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
             Ok(Some(Artist { id, name }))
         } else {
             Ok(None)
@@ -337,9 +306,17 @@ impl Library {
             .map_err(|e| anyhow::anyhow!("Failed to query artists: {}", e))?;
 
         let mut artists = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
-            let id: String = row.get(0).map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let name: String = row.get(1).map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
+            let id: String = row
+                .get(0)
+                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
+            let name: String = row
+                .get(1)
+                .map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
             artists.push(Artist { id, name });
         }
         Ok(artists)
@@ -347,7 +324,6 @@ impl Library {
 
     /// Add an album to the library
     pub async fn add_album(&self, album: &Album) -> anyhow::Result<Album> {
-        // Check if album already exists by title
         if let Some(existing) = self.find_album_by_title(&album.title).await? {
             return Ok(existing);
         }
@@ -358,14 +334,20 @@ impl Library {
                 [
                     Value::Text(album.id.clone()),
                     Value::Text(album.title.clone()),
-                    album.release_year.map(|y| Value::Integer(y as i64)).unwrap_or(Value::Null),
-                    album.album_art.clone().map(Value::Blob).unwrap_or(Value::Null),
+                    album
+                        .release_year
+                        .map(|y| Value::Integer(y as i64))
+                        .unwrap_or(Value::Null),
+                    album
+                        .album_art
+                        .clone()
+                        .map(Value::Blob)
+                        .unwrap_or(Value::Null),
                 ],
             )
             .await
             .map_err(|e| anyhow::anyhow!("Failed to insert album: {}", e))?;
 
-        // Add album artists
         for artist in &album.artists {
             let artist = self.add_artist(artist).await?;
             self.connection
@@ -391,13 +373,24 @@ impl Library {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to query album: {}", e))?;
 
-        if let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
-            let id: String = row.get(0).map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let title: String = row.get(1).map_err(|e| anyhow::anyhow!("Failed to get title: {}", e))?;
-            let release_year: Option<i32> = row.get::<Option<i64>>(2)
+        if let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
+            let id: String = row
+                .get(0)
+                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
+            let title: String = row
+                .get(1)
+                .map_err(|e| anyhow::anyhow!("Failed to get title: {}", e))?;
+            let release_year: Option<i32> = row
+                .get::<Option<i64>>(2)
                 .map_err(|e| anyhow::anyhow!("Failed to get release_year: {}", e))?
                 .map(|y| y as i32);
-            let album_art: Option<Vec<u8>> = row.get(3).map_err(|e| anyhow::anyhow!("Failed to get album_art: {}", e))?;
+            let album_art: Option<Vec<u8>> = row
+                .get(3)
+                .map_err(|e| anyhow::anyhow!("Failed to get album_art: {}", e))?;
 
             let artists = self.get_album_artists(&id).await?;
 
@@ -424,13 +417,24 @@ impl Library {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to query album: {}", e))?;
 
-        if let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
-            let id: String = row.get(0).map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let title: String = row.get(1).map_err(|e| anyhow::anyhow!("Failed to get title: {}", e))?;
-            let release_year: Option<i32> = row.get::<Option<i64>>(2)
+        if let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
+            let id: String = row
+                .get(0)
+                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
+            let title: String = row
+                .get(1)
+                .map_err(|e| anyhow::anyhow!("Failed to get title: {}", e))?;
+            let release_year: Option<i32> = row
+                .get::<Option<i64>>(2)
                 .map_err(|e| anyhow::anyhow!("Failed to get release_year: {}", e))?
                 .map(|y| y as i32);
-            let album_art: Option<Vec<u8>> = row.get(3).map_err(|e| anyhow::anyhow!("Failed to get album_art: {}", e))?;
+            let album_art: Option<Vec<u8>> = row
+                .get(3)
+                .map_err(|e| anyhow::anyhow!("Failed to get album_art: {}", e))?;
 
             let artists = self.get_album_artists(&id).await?;
 
@@ -460,9 +464,17 @@ impl Library {
             .map_err(|e| anyhow::anyhow!("Failed to query album artists: {}", e))?;
 
         let mut artists = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
-            let id: String = row.get(0).map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let name: String = row.get(1).map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
+            let id: String = row
+                .get(0)
+                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
+            let name: String = row
+                .get(1)
+                .map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
             artists.push(Artist { id, name });
         }
         Ok(artists)
@@ -480,13 +492,24 @@ impl Library {
             .map_err(|e| anyhow::anyhow!("Failed to query albums: {}", e))?;
 
         let mut albums = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
-            let id: String = row.get(0).map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let title: String = row.get(1).map_err(|e| anyhow::anyhow!("Failed to get title: {}", e))?;
-            let release_year: Option<i32> = row.get::<Option<i64>>(2)
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
+            let id: String = row
+                .get(0)
+                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
+            let title: String = row
+                .get(1)
+                .map_err(|e| anyhow::anyhow!("Failed to get title: {}", e))?;
+            let release_year: Option<i32> = row
+                .get::<Option<i64>>(2)
                 .map_err(|e| anyhow::anyhow!("Failed to get release_year: {}", e))?
                 .map(|y| y as i32);
-            let album_art: Option<Vec<u8>> = row.get(3).map_err(|e| anyhow::anyhow!("Failed to get album_art: {}", e))?;
+            let album_art: Option<Vec<u8>> = row
+                .get(3)
+                .map_err(|e| anyhow::anyhow!("Failed to get album_art: {}", e))?;
 
             let artists = self.get_album_artists(&id).await?;
 
@@ -503,10 +526,8 @@ impl Library {
 
     /// Add a track to the library
     pub async fn add_track(&self, track: &Track) -> anyhow::Result<Track> {
-        // Add album if present
         let album = self.add_album(&track.album).await?;
 
-        // Add artists
         let mut artists_with_ids = Vec::new();
         for artist in &track.artists {
             let artist = self.add_artist(artist).await?;
@@ -531,18 +552,19 @@ impl Library {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to insert track: {}", e))?;
 
-        // Add track artists
         for artist in &artists_with_ids {
             self.connection
                 .execute(
                     "INSERT OR IGNORE INTO track_artists (track_id, artist_id) VALUES (?, ?)",
-                    [Value::Text(track.id.clone()), Value::Text(artist.id.clone())],
+                    [
+                        Value::Text(track.id.clone()),
+                        Value::Text(artist.id.clone()),
+                    ],
                 )
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to insert track artist: {}", e))?;
         }
 
-        // Return track with updated artists
         let mut result = track.clone();
         result.artists = artists_with_ids;
         Ok(result)
@@ -557,7 +579,7 @@ impl Library {
         Ok(results)
     }
 
-    /// Find a track by ID 
+    /// Find a track by ID
     pub async fn find_track_by_id(&self, id: &str) -> anyhow::Result<Option<Track>> {
         let mut rows = self
             .connection
@@ -569,7 +591,11 @@ impl Library {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to query track: {}", e))?;
 
-        if let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
+        if let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
             self.row_to_track(&row).await.map(Some)
         } else {
             Ok(None)
@@ -577,7 +603,11 @@ impl Library {
     }
 
     /// Find a track by source ID
-    pub async fn find_track_by_source(&self, source: TrackSource, id: &str) -> anyhow::Result<Option<Track>> {
+    pub async fn find_track_by_source(
+        &self,
+        source: TrackSource,
+        id: &str,
+    ) -> anyhow::Result<Option<Track>> {
         let mut rows = self
             .connection
             .query(
@@ -588,7 +618,11 @@ impl Library {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to query track: {}", e))?;
 
-        if let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
+        if let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
             self.row_to_track(&row).await.map(Some)
         } else {
             Ok(None)
@@ -608,7 +642,11 @@ impl Library {
             .map_err(|e| anyhow::anyhow!("Failed to query tracks: {}", e))?;
 
         let mut tracks = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
             tracks.push(self.row_to_track(&row).await?);
         }
         Ok(tracks)
@@ -627,7 +665,11 @@ impl Library {
             .map_err(|e| anyhow::anyhow!("Failed to query tracks: {}", e))?;
 
         let mut tracks = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
             tracks.push(self.row_to_track(&row).await?);
         }
         Ok(tracks)
@@ -649,7 +691,11 @@ impl Library {
             .map_err(|e| anyhow::anyhow!("Failed to query unorganized tracks: {}", e))?;
 
         let mut tracks = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
             tracks.push(self.row_to_track(&row).await?);
         }
         Ok(tracks)
@@ -669,9 +715,17 @@ impl Library {
             .map_err(|e| anyhow::anyhow!("Failed to query track artists: {}", e))?;
 
         let mut artists = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
-            let id: String = row.get(0).map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let name: String = row.get(1).map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
+            let id: String = row
+                .get(0)
+                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
+            let name: String = row
+                .get(1)
+                .map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
             artists.push(Artist { id, name });
         }
         Ok(artists)
@@ -679,14 +733,29 @@ impl Library {
 
     /// Convert a database row to a Track
     async fn row_to_track(&self, row: &turso::Row) -> anyhow::Result<Track> {
-        let id: String = row.get(0).map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-        let title: String = row.get(1).map_err(|e| anyhow::anyhow!("Failed to get title: {}", e))?;
-        let album_id: String = row.get(2).map_err(|e| anyhow::anyhow!("Failed to get album_id: {}", e))?;
-        let duration: f64 = row.get(3).map_err(|e| anyhow::anyhow!("Failed to get duration: {}", e))?;
-        let path: Option<String> = row.get(4).map_err(|e| anyhow::anyhow!("Failed to get path: {}", e))?;
-        let source_str: String = row.get(5).map_err(|e| anyhow::anyhow!("Failed to get source: {}", e))?;
-        let source_id: Option<String> = row.get(6).map_err(|e| anyhow::anyhow!("Failed to get source_id: {}", e))?;
-        let track_number: Option<i32> = row.get::<Option<i64>>(7)
+        let id: String = row
+            .get(0)
+            .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
+        let title: String = row
+            .get(1)
+            .map_err(|e| anyhow::anyhow!("Failed to get title: {}", e))?;
+        let album_id: String = row
+            .get(2)
+            .map_err(|e| anyhow::anyhow!("Failed to get album_id: {}", e))?;
+        let duration: f64 = row
+            .get(3)
+            .map_err(|e| anyhow::anyhow!("Failed to get duration: {}", e))?;
+        let path: Option<String> = row
+            .get(4)
+            .map_err(|e| anyhow::anyhow!("Failed to get path: {}", e))?;
+        let source_str: String = row
+            .get(5)
+            .map_err(|e| anyhow::anyhow!("Failed to get source: {}", e))?;
+        let source_id: Option<String> = row
+            .get(6)
+            .map_err(|e| anyhow::anyhow!("Failed to get source_id: {}", e))?;
+        let track_number: Option<i32> = row
+            .get::<Option<i64>>(7)
             .map_err(|e| anyhow::anyhow!("Failed to get track_number: {}", e))?
             .map(|n| n as i32);
 
@@ -694,7 +763,10 @@ impl Library {
             .ok_or_else(|| anyhow::anyhow!("Invalid track source: {}", source_str))?;
 
         let artists = self.get_track_artists(&id).await?;
-        let album = self.find_album_by_id(&album_id).await?.ok_or_else(|| anyhow::anyhow!("Album not found for track: {}", id))?;
+        let album = self
+            .find_album_by_id(&album_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Album not found for track: {}", id))?;
 
         Ok(Track {
             id,
@@ -726,7 +798,11 @@ impl Library {
                 [
                     Value::Text(playlist.id.clone()),
                     Value::Text(playlist.name.clone()),
-                    playlist.description.clone().map(Value::Text).unwrap_or(Value::Null),
+                    playlist
+                        .description
+                        .clone()
+                        .map(Value::Text)
+                        .unwrap_or(Value::Null),
                 ],
             )
             .await
@@ -746,10 +822,20 @@ impl Library {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to query playlist: {}", e))?;
 
-        if let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
-            let id: String = row.get(0).map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let name: String = row.get(1).map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
-            let description: Option<String> = row.get(2).map_err(|e| anyhow::anyhow!("Failed to get description: {}", e))?;
+        if let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
+            let id: String = row
+                .get(0)
+                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
+            let name: String = row
+                .get(1)
+                .map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
+            let description: Option<String> = row
+                .get(2)
+                .map_err(|e| anyhow::anyhow!("Failed to get description: {}", e))?;
 
             let tracks = self.get_playlist_tracks(&id).await?;
 
@@ -768,15 +854,28 @@ impl Library {
     pub async fn all_playlists(&self) -> anyhow::Result<Vec<Playlist>> {
         let mut rows = self
             .connection
-            .query("SELECT id, name, description FROM playlists ORDER BY name", ())
+            .query(
+                "SELECT id, name, description FROM playlists ORDER BY name",
+                (),
+            )
             .await
             .map_err(|e| anyhow::anyhow!("Failed to query playlists: {}", e))?;
 
         let mut playlists = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
-            let id: String = row.get(0).map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let name: String = row.get(1).map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
-            let description: Option<String> = row.get(2).map_err(|e| anyhow::anyhow!("Failed to get description: {}", e))?;
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
+            let id: String = row
+                .get(0)
+                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
+            let name: String = row
+                .get(1)
+                .map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
+            let description: Option<String> = row
+                .get(2)
+                .map_err(|e| anyhow::anyhow!("Failed to get description: {}", e))?;
 
             let tracks = self.get_playlist_tracks(&id).await?;
 
@@ -806,15 +905,22 @@ impl Library {
             .map_err(|e| anyhow::anyhow!("Failed to query playlist tracks: {}", e))?;
 
         let mut tracks = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
             tracks.push(self.row_to_track(&row).await?);
         }
         Ok(tracks)
     }
 
     /// Add a track to a playlist
-    pub async fn add_track_to_playlist(&self, playlist_id: &str, track_id: &str) -> anyhow::Result<()> {
-        // Get the next position
+    pub async fn add_track_to_playlist(
+        &self,
+        playlist_id: &str,
+        track_id: &str,
+    ) -> anyhow::Result<()> {
         let mut rows = self
             .connection
             .query(
@@ -824,7 +930,11 @@ impl Library {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get next position: {}", e))?;
 
-        let position: i64 = if let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
+        let position: i64 = if let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
             row.get(0).unwrap_or(1)
         } else {
             1
@@ -846,7 +956,11 @@ impl Library {
     }
 
     /// Remove a track from a playlist
-    pub async fn remove_track_from_playlist(&self, playlist_id: &str, track_id: &str) -> anyhow::Result<()> {
+    pub async fn remove_track_from_playlist(
+        &self,
+        playlist_id: &str,
+        track_id: &str,
+    ) -> anyhow::Result<()> {
         self.connection
             .execute(
                 "DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?",
@@ -874,7 +988,11 @@ impl Library {
                 "UPDATE playlists SET name = ?, description = ? WHERE id = ?",
                 [
                     Value::Text(playlist.name.clone()),
-                    playlist.description.clone().map(Value::Text).unwrap_or(Value::Null),
+                    playlist
+                        .description
+                        .clone()
+                        .map(Value::Text)
+                        .unwrap_or(Value::Null),
                     Value::Text(playlist.id.clone()),
                 ],
             )
@@ -897,7 +1015,11 @@ impl Library {
             .map_err(|e| anyhow::anyhow!("Failed to search tracks: {}", e))?;
 
         let mut tracks = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
             tracks.push(self.row_to_track(&row).await?);
         }
         Ok(tracks)
@@ -916,9 +1038,17 @@ impl Library {
             .map_err(|e| anyhow::anyhow!("Failed to search artists: {}", e))?;
 
         let mut artists = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
-            let id: String = row.get(0).map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let name: String = row.get(1).map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
+            let id: String = row
+                .get(0)
+                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
+            let name: String = row
+                .get(1)
+                .map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
             artists.push(Artist { id, name });
         }
         Ok(artists)
@@ -937,13 +1067,24 @@ impl Library {
             .map_err(|e| anyhow::anyhow!("Failed to search albums: {}", e))?;
 
         let mut albums = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
-            let id: String = row.get(0).map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let title: String = row.get(1).map_err(|e| anyhow::anyhow!("Failed to get title: {}", e))?;
-            let release_year: Option<i32> = row.get::<Option<i64>>(2)
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
+            let id: String = row
+                .get(0)
+                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
+            let title: String = row
+                .get(1)
+                .map_err(|e| anyhow::anyhow!("Failed to get title: {}", e))?;
+            let release_year: Option<i32> = row
+                .get::<Option<i64>>(2)
                 .map_err(|e| anyhow::anyhow!("Failed to get release_year: {}", e))?
                 .map(|y| y as i32);
-            let album_art: Option<Vec<u8>> = row.get(3).map_err(|e| anyhow::anyhow!("Failed to get album_art: {}", e))?;
+            let album_art: Option<Vec<u8>> = row
+                .get(3)
+                .map_err(|e| anyhow::anyhow!("Failed to get album_art: {}", e))?;
 
             let artists = self.get_album_artists(&id).await?;
 
@@ -971,7 +1112,11 @@ impl Library {
             .map_err(|e| anyhow::anyhow!("Failed to query tracks by album: {}", e))?;
 
         let mut tracks = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
             tracks.push(self.row_to_track(&row).await?);
         }
         Ok(tracks)
@@ -993,14 +1138,18 @@ impl Library {
             .map_err(|e| anyhow::anyhow!("Failed to query tracks by artist: {}", e))?;
 
         let mut tracks = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))? {
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
+        {
             tracks.push(self.row_to_track(&row).await?);
         }
         Ok(tracks)
     }
 }
 
-impl  Track {
+impl Track {
     pub async fn load(&self) -> anyhow::Result<impl Source + use<>> {
         match self.source {
             TrackSource::Local => {
@@ -1044,4 +1193,3 @@ pub async fn get_library() -> anyhow::Result<&'static Library> {
             .ok_or(anyhow::anyhow!("Library connection not set"))?)
     }
 }
-

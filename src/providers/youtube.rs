@@ -1,7 +1,6 @@
 use std::{io::SeekFrom, sync::Arc};
 
 use anyhow::Result;
-use base64::{Engine, prelude::BASE64_STANDARD};
 use futures::{
     future::{join_all, try_join_all},
     lock::Mutex,
@@ -19,7 +18,8 @@ use tokio::{
 use ulid::Ulid;
 
 use crate::{
-    library::{Album, Artist, LIBRARY, Track, TrackSource}, lyrics::{self},
+    library::{Album, Artist, LIBRARY, Track, TrackSource},
+    lyrics::{self},
 };
 
 pub static YT_CLIENT: OnceCell<RustyPipe> = OnceCell::new();
@@ -35,7 +35,7 @@ pub struct YtTrack {
     pub artist: String,
     pub album: String,
     pub album_art: Option<Vec<u8>>,
-    pub duration: u32,             // in seconds
+    pub duration: u32, // in seconds
 }
 
 pub async fn search_tracks(query: &str) -> Result<Vec<YtTrack>> {
@@ -107,7 +107,7 @@ pub async fn download_track(id: &str, output_path: &str) -> Result<()> {
         .to_str()?
         .parse::<u64>()?;
     println!("Total size: {} bytes", total_size);
-    let file = Arc::new(Mutex::new(file));    
+    let file = Arc::new(Mutex::new(file));
     let chunk_size = 1024 * 256; // 256 KB
     let semaphore = Arc::new(tokio::sync::Semaphore::new(8));
     let mut futures = Vec::new();
@@ -169,25 +169,51 @@ pub async fn query_track(id: &str) -> Result<Track> {
         None => None,
     };
     let id = Ulid::new().to_string();
-    let artists: Vec<Artist> = track.track.artists.iter().map(|a| Artist::new(a.name.clone())).collect();
+    let artists: Vec<Artist> = track
+        .track
+        .artists
+        .iter()
+        .map(|a| Artist::new(a.name.clone()))
+        .collect();
     let track = Track {
         id,
         title: track.track.name,
-        album: track.track.album.as_ref().map(|a| Album::new(a.name.clone(), artists.first().cloned().into_iter().collect(), None, album_cover))
-        .unwrap_or(Album::new("Unknown Album".to_string(), artists.first().cloned().into_iter().collect(), None, None)),
+        album: track
+            .track
+            .album
+            .as_ref()
+            .map(|a| {
+                Album::new(
+                    a.name.clone(),
+                    artists.first().cloned().into_iter().collect(),
+                    None,
+                    album_cover,
+                )
+            })
+            .unwrap_or(Album::new(
+                "Unknown Album".to_string(),
+                artists.first().cloned().into_iter().collect(),
+                None,
+                None,
+            )),
         artists,
         duration: track.track.duration.unwrap_or(0) as f64,
         path: None,
         source_id: Some(track.track.id),
         source: TrackSource::YouTube,
-        track_number: None
+        track_number: None,
     };
     Ok(track)
 }
 
 pub async fn get_or_query_track(id: &str) -> Result<Track> {
-    let library = LIBRARY.get().ok_or(anyhow::anyhow!("Library not initialized"))?;
-    if let Some(track) = library.find_track_by_source(TrackSource::YouTube, id).await? {
+    let library = LIBRARY
+        .get()
+        .ok_or(anyhow::anyhow!("Library not initialized"))?;
+    if let Some(track) = library
+        .find_track_by_source(TrackSource::YouTube, id)
+        .await?
+    {
         Ok(track)
     } else {
         let track = query_track(id).await?;
@@ -204,7 +230,8 @@ pub async fn get_default_download_path(id: &str) -> Result<String> {
     fs::create_dir_all(
         path.parent()
             .ok_or(anyhow::anyhow!("Could not find parent directory"))?,
-    ).await?;
+    )
+    .await?;
     let path = path.to_str().ok_or(anyhow::anyhow!("Invalid path"))?;
     Ok(path.to_string())
 }
@@ -217,7 +244,9 @@ pub async fn download_track_and_save(track: &Track, path: &str) -> Result<()> {
         return Err(anyhow::anyhow!("Track does not have a YouTube ID"));
     };
     download_track(video_id, &path).await?;
-    let library = LIBRARY.get().ok_or(anyhow::anyhow!("Library not initialized"))?;
+    let library = LIBRARY
+        .get()
+        .ok_or(anyhow::anyhow!("Library not initialized"))?;
     library.add_track(&track).await?;
     Ok(())
 }

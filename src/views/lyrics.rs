@@ -1,7 +1,10 @@
 use std::time::Duration;
 
 use gpui::prelude::FluentBuilder;
-use gpui::{AppContext, InteractiveElement, IntoElement, ParentElement, Render, ScrollHandle, StatefulInteractiveElement, Styled, Timer};
+use gpui::{
+    AppContext, InteractiveElement, IntoElement, ParentElement, Render, ScrollHandle,
+    StatefulInteractiveElement, Styled, Timer,
+};
 use gpui_component::StyledExt;
 use tokio::task;
 
@@ -156,11 +159,7 @@ impl Render for LyricsView {
                     gpui::div()
                         .text_sm()
                         .text_color(gpui::rgb(0x888888))
-                        .child(format!(
-                            "{} - {}",
-                            track.title,
-                            track.artists_string()
-                        )),
+                        .child(format!("{} - {}", track.title, track.artists_string())),
                 )
             })
             .when(self.loading, |div| {

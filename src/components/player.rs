@@ -193,9 +193,9 @@ impl Render for Player {
         self.playback_state.update(cx, |state, cx| {
             state.set_value(slider_value, window, cx);
         });
-        
+
         let album_art_source = self.album_art_source.clone();
-        
+
         GroupBox::new().outline().child(
             div()
                 .w_full()
@@ -236,7 +236,13 @@ impl Render for Player {
                                         .flex_1()
                                         .min_w_0()
                                         .w_full()
-                                        .child(div().child(title).text_lg().text_ellipsis().font_semibold())
+                                        .child(
+                                            div()
+                                                .child(title)
+                                                .text_lg()
+                                                .text_ellipsis()
+                                                .font_semibold(),
+                                        )
                                         .child(div().child(artist).text_sm().text_ellipsis()),
                                 ),
                         )

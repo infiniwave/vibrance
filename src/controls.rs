@@ -12,9 +12,7 @@ pub fn initialize(window: &mut Window) -> Result<OsMediaControls> {
         use souvlaki::platform::windows::WindowsConfig;
 
         let hwnd = try_get_hwnd(window)?;
-        WindowsConfig {
-            hwnd,
-        }
+        WindowsConfig { hwnd }
     };
     #[cfg(target_os = "linux")]
     let config = {
@@ -25,7 +23,7 @@ pub fn initialize(window: &mut Window) -> Result<OsMediaControls> {
         }
     };
     let mut controls = OsMediaControls::new(config)
-    .map_err(|e| anyhow::anyhow!("Failed to create MediaControls: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to create MediaControls: {:?}", e))?;
     controls
         .attach(|e| {
             match e {

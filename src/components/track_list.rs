@@ -11,7 +11,9 @@ use gpui_component::{
 };
 
 use crate::{
-    components::{icon::Icon, render_image}, library::Track, providers::youtube::YtTrack,
+    components::{icon::Icon, render_image},
+    library::Track,
+    providers::youtube::YtTrack,
 };
 
 pub type OnPlayCallback<T> = Arc<dyn Fn(T) + Send + Sync>;
@@ -45,7 +47,7 @@ impl<T: RenderedTrack> TrackListDelegate<T> {
         self
     }
 }
-    
+
 impl<T: RenderedTrack> From<Vec<T>> for TrackListDelegate<T> {
     fn from(items: Vec<T>) -> Self {
         Self::new(items)
@@ -98,9 +100,7 @@ impl<T: RenderedTrack> ListDelegate for TrackListDelegate<T> {
                                 .child(
                                     div()
                                         .v_flex()
-                                        .child(
-                                            div().child(title.to_string()).text_ellipsis(),
-                                        )
+                                        .child(div().child(title.to_string()).text_ellipsis())
                                         .child(div().child(artists).text_sm().text_ellipsis()),
                                 ),
                         )

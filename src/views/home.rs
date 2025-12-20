@@ -5,7 +5,9 @@ use gpui_component::StyledExt;
 use tokio::task;
 
 use crate::{
-    components::track_list::{TrackList, TrackListDelegate}, library::{LIBRARY, Track}, player::PLAYER, preferences::PREFERENCES, providers
+    components::track_list::{TrackList, TrackListDelegate},
+    library::{LIBRARY, Track},
+    player::PLAYER,
 };
 
 pub struct HomeView {

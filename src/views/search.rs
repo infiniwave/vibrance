@@ -12,7 +12,12 @@ use crate::{
         icon::Icon,
         player::Player as PlayerComponent,
         track_list::{TrackList, TrackListDelegate},
-    }, library::Track, player::PLAYER, providers::{self, youtube::{self, YtTrack}}
+    },
+    player::PLAYER,
+    providers::{
+        self,
+        youtube::{self, YtTrack},
+    },
 };
 
 pub struct SearchView {
@@ -29,26 +34,27 @@ impl SearchView {
     ) -> Self {
         let input_state = cx.new(|cx| InputState::new(window, cx).placeholder("Search..."));
 
-        let on_play_callback: Arc<dyn Fn(YtTrack) + Send + Sync> = Arc::new(move |track: YtTrack| {
-            task::spawn(async move {
-                let resolved_track = youtube::query_track(&track.id).await;
-                let Ok(track) = resolved_track else {
-                    eprintln!("Failed to query track details for id: {}", track.id);
-                    return;
-                };
-                if let Some(player) = PLAYER.get() {
-                    println!("Playing track: {:?}", track.title);
-                    player.clear_queue();
-                    player.add_track(track);
-                    player.play();
-                } else {
-                    eprintln!("Player not initialized");
-                }
+        let on_play_callback: Arc<dyn Fn(YtTrack) + Send + Sync> =
+            Arc::new(move |track: YtTrack| {
+                task::spawn(async move {
+                    let resolved_track = youtube::query_track(&track.id).await;
+                    let Ok(track) = resolved_track else {
+                        eprintln!("Failed to query track details for id: {}", track.id);
+                        return;
+                    };
+                    if let Some(player) = PLAYER.get() {
+                        println!("Playing track: {:?}", track.title);
+                        player.clear_queue();
+                        player.add_track(track);
+                        player.play();
+                    } else {
+                        eprintln!("Player not initialized");
+                    }
+                });
             });
-        });
 
-        let initial_delegate = TrackListDelegate::new(vec![])
-        .with_on_play(on_play_callback.clone());
+        let initial_delegate =
+            TrackListDelegate::new(vec![]).with_on_play(on_play_callback.clone());
 
         let track_list = cx.new(|cx| TrackList::new(window, cx, initial_delegate));
         let x = track_list.clone();

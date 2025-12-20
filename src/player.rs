@@ -13,7 +13,6 @@ use tokio::{
 
 use crate::{library::Track, preferences::PREFERENCES};
 
-/// Global player instance
 pub static PLAYER: OnceCell<Player> = OnceCell::new();
 
 #[derive(Debug, Clone)]
