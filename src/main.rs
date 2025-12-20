@@ -13,7 +13,6 @@ use std::{path::PathBuf, time::Duration};
 
 use gpui::*;
 use gpui_component::*;
-use gpui_component_assets::Assets;
 use once_cell::sync::OnceCell;
 use souvlaki::{MediaMetadata, MediaPlayback, OsMediaControls};
 use tokio::{
@@ -80,11 +79,15 @@ impl Render for App {
             .text_color(rgb(16777215))
             .v_flex()
             .size_full()
-            .child(TitleBar::new().child(div()
-                .h_flex()
-                .gap_2()
-                .child(img("svg/app.svg").size(px(16.0)))
-                .child("Vibrance")))
+            .child(
+                TitleBar::new().child(
+                    div()
+                        .h_flex()
+                        .gap_2()
+                        .child(img("svg/app.svg").size(px(16.0)))
+                        .child("Vibrance"),
+                ),
+            )
             .child(
                 div()
                     .h_flex()
@@ -185,7 +188,7 @@ async fn main() {
                         if let Some(ref album_art) = track.album.album_art {
                             use souvlaki::platform::mpris::MprisCover;
                             controls
-                                .set_cover(Some(MprisCover::Bytes(album_art.clone())))
+                                .set_cover(Some(MprisCover::from_bytes(album_art)))
                                 .unwrap_or_else(|e| {
                                     eprintln!("Failed to set album art: {:?}", e);
                                 });
@@ -245,8 +248,7 @@ async fn main() {
         .load("fonts/dm-sans-italic-variable.ttf")
         .expect("Missing font")
         .expect("Missing font");
-    let app = Application::new()
-        .with_assets(resources);
+    let app = Application::new().with_assets(resources);
     app.text_system()
         .add_fonts(vec![dm_sans, dm_sans_italic])
         .expect("Failed to load fonts");
