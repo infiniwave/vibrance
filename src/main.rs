@@ -164,11 +164,23 @@ async fn main() {
                         .await;
                     #[cfg(target_os = "windows")]
                     {
-                        // On Windows, also set the album art if available
+                        // On Windows, set the album art if available
                         if let Some(ref album_art) = track.album.album_art {
                             use souvlaki::platform::windows::WindowsCover;
                             controls
                                 .set_cover(Some(WindowsCover::Bytes(album_art.clone())))
+                                .unwrap_or_else(|e| {
+                                    eprintln!("Failed to set album art: {:?}", e);
+                                });
+                        }
+                    }
+                    #[cfg(target_os = "linux")]
+                    {
+                        // On Linux, also set the album art if available
+                        if let Some(ref album_art) = track.album.album_art {
+                            use souvlaki::platform::mpris::MprisCover;
+                            controls
+                                .set_cover(Some(MprisCover::Bytes(album_art.clone())))
                                 .unwrap_or_else(|e| {
                                     eprintln!("Failed to set album art: {:?}", e);
                                 });
