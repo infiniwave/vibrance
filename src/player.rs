@@ -346,48 +346,6 @@ impl Player {
     pub fn out_evt_receiver(&self) -> Receiver<PlayerEvent> {
         self.in_evt.subscribe()
     }
-    // TODO: add Local resolver
-    // pub fn resolve_track(&self, path: String) -> Result<Track> {
-    //     if path.is_empty() {
-    //         return Err(anyhow::anyhow!("Path is empty"));
-    //     }
-    //     let path = PathBuf::from(path);
-    //     if !path.exists() {
-    //         return Err(anyhow::anyhow!("File does not exist: {}", path.display()));
-    //     }
-    //     let tag = Probe::open(&path)?.read()?;
-    //     let properties = tag.properties();
-    //     let tag = match tag.primary_tag() {
-    //         Some(primary_tag) => Some(primary_tag),
-    //         None => tag.first_tag(),
-    //     };
-    //     let id = Ulid::new().to_string();
-    //     let mut artists = tag.map_or_else(Vec::new, |t| {
-    //         t.get_strings(&ItemKey::TrackArtists)
-    //             .map(String::from)
-    //             .collect()
-    //     });
-    //     if artists.is_empty() {
-    //         let artist = tag.and_then(|t| t.get_string(&ItemKey::TrackArtist).map(String::from));
-    //         if let Some(artist) = artist {
-    //             artists.push(artist);
-    //         }
-    //     }
-    //     let album_art = tag
-    //         .and_then(|t| t.pictures().get(0))
-    //         .map(|p| p.data())
-    //         .map(|d| BASE64_STANDARD.encode(d));
-    //     Ok(Track {
-    //         id,
-    //         title: tag.and_then(|t| t.get_string(&ItemKey::TrackTitle).map(String::from)),
-    //         artists,
-    //         album: tag.and_then(|t| t.get_string(&ItemKey::AlbumTitle).map(String::from)),
-    //         album_art,
-    //         duration: properties.duration().as_secs_f64(),
-    //         path: Some(path.to_string_lossy().to_string()),
-    //         yt_id: None,
-    //     })
-    // }
 
     pub fn clear_queue(&self) {
         self.in_cmd
