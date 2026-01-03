@@ -5,9 +5,7 @@ use gpui::{App, Image, ImageCacheError, ImageFormat, RenderImage, SharedString, 
 pub mod icon;
 pub mod player;
 pub mod sidebar;
-pub mod sidebar_item;
 pub mod track_list;
-pub mod track_list_item;
 
 pub fn render_image(
     w: &mut Window,
