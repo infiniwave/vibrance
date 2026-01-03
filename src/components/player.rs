@@ -57,17 +57,14 @@ impl Player {
         )
         .detach();
 
-        cx.subscribe(
-            &volume_state,
-            |_: &mut Self, _, event: &SliderEvent, cx| {
+        cx.subscribe(&volume_state, |_: &mut Self, _, event: &SliderEvent, cx| {
                 let SliderEvent::Change(value) = event;
                 let position = value.end() / 100.0; // convert from 0-100 to 0-1
                 if let Some(player) = PLAYER.get() {
                     player.set_volume(position);
                 }
                 cx.notify();
-            },
-        )
+        })
         .detach();
 
         cx.spawn(async move |this, cx| {

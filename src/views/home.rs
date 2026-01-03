@@ -6,7 +6,7 @@ use tokio::task;
 
 use crate::{
     components::track_list::{TrackList, TrackListDelegate},
-    library::{LIBRARY, Track},
+    library::{LIBRARY, LibraryEvent, Track},
     player::PLAYER,
 };
 
@@ -53,6 +53,36 @@ impl HomeView {
                 e.update_delegate(cx, new_delegate)
             })
             .ok();
+        })
+        .detach();
+
+        let track_list_for_events = track_list.clone();
+        let on_play_for_events = on_play_callback.clone();
+        cx.spawn(async move |_, app| {
+            let library = LIBRARY.get().expect("Library not initialized");
+            let mut recv = library.subscribe();
+            while let Ok(event) = recv.recv().await {
+                match event {
+                    LibraryEvent::TracksAdded(_) => {
+                        let tracks = task::spawn(async move {
+                            let library = LIBRARY
+                                .get()
+                                .ok_or(anyhow::anyhow!("Library not initialized"))?;
+                            Ok(library.all_tracks().await?)
+                        })
+                            .await
+                            .map_err(|e| anyhow::anyhow!("Failed to join task: {}", e))
+                            .flatten()
+                            .unwrap_or_default();
+                        
+                        let new_delegate = TrackListDelegate::new(tracks).with_on_play(on_play_for_events.clone());
+                        app.update_entity(&track_list_for_events, |e, cx| {
+                            e.update_delegate(cx, new_delegate)
+                        })
+                        .ok();
+                    }
+                }
+            }
         })
         .detach();
 

@@ -3,13 +3,21 @@ use std::{fs::File, path::PathBuf};
 use once_cell::sync::OnceCell;
 use rodio::{Decoder, Source};
 use serde::{Deserialize, Serialize};
-use tokio::fs;
+use tokio::{
+    fs,
+    sync::broadcast::{channel, Sender},
+};
 use turso::{Builder, Connection, Value};
 use ulid::Ulid;
 
 use crate::providers::youtube;
 
 pub static LIBRARY: OnceCell<Library> = OnceCell::new();
+
+#[derive(Debug, Clone)]
+pub enum LibraryEvent {
+    TracksAdded(Vec<Track>),
+}
 
 const CREATE_DB: &str = r#"
 CREATE TABLE IF NOT EXISTS artists (
@@ -196,6 +204,7 @@ impl Playlist {
 #[derive(Debug)]
 pub struct Library {
     connection: Connection,
+    event_sender: Sender<LibraryEvent>,
 }
 
 impl Library {
@@ -219,7 +228,15 @@ impl Library {
             .execute_batch(CREATE_DB)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to create database: {}", e))?;
-        Ok(Self { connection })
+        let (event_sender, _) = channel::<LibraryEvent>(25);
+        Ok(Self {
+            connection,
+            event_sender,
+        })
+    }
+
+    pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<LibraryEvent> {
+        self.event_sender.subscribe()
     }
 
     pub fn write(&self) -> anyhow::Result<()> {
@@ -526,6 +543,12 @@ impl Library {
 
     /// Add a track to the library
     pub async fn add_track(&self, track: &Track) -> anyhow::Result<Track> {
+        let track = self.add_track_internal(track).await?;
+        let _ = self.event_sender.send(LibraryEvent::TracksAdded(vec![track.clone()]));
+        Ok(track)
+    }
+
+    async fn add_track_internal(&self, track: &Track) -> anyhow::Result<Track> {
         let album = self.add_album(&track.album).await?;
 
         let mut artists_with_ids = Vec::new();
@@ -574,7 +597,10 @@ impl Library {
     pub async fn add_tracks(&self, tracks: &[Track]) -> anyhow::Result<Vec<Track>> {
         let mut results = Vec::new();
         for track in tracks {
-            results.push(self.add_track(track).await?);
+            results.push(self.add_track_internal(track).await?);
+        }
+        if !results.is_empty() {
+            let _ = self.event_sender.send(LibraryEvent::TracksAdded(results.clone()));
         }
         Ok(results)
     }
