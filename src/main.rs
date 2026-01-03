@@ -305,6 +305,7 @@ async fn main() {
                     size(px(900.0), px(700.0)),
                     cx,
                 ))),
+                window_decorations: None,
                 ..Default::default()
             },
             |window, cx| {
