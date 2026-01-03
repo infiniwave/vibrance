@@ -1,11 +1,15 @@
 use std::{fs::File, path::PathBuf};
 
+use anyhow::Result;
 use once_cell::sync::OnceCell;
 use rodio::{Decoder, Source};
 use serde::{Deserialize, Serialize};
 use tokio::{
     fs,
-    sync::broadcast::{channel, Sender},
+    sync::{
+        broadcast::{channel, Sender as BroadcastSender},
+        mpsc, oneshot,
+    },
 };
 use turso::{Builder, Connection, Value};
 use ulid::Ulid;
@@ -17,6 +21,36 @@ pub static LIBRARY: OnceCell<Library> = OnceCell::new();
 #[derive(Debug, Clone)]
 pub enum LibraryEvent {
     TracksAdded(Vec<Track>),
+}
+
+enum DbCommand {
+    ExecuteBatch {
+        sql: String,
+        respond_to: oneshot::Sender<Result<(), String>>,
+    },
+    Cacheflush {
+        respond_to: oneshot::Sender<Result<(), String>>,
+    },
+    Execute {
+        sql: String,
+        params: Vec<Value>,
+        respond_to: oneshot::Sender<Result<(), String>>,
+    },
+    Query {
+        sql: String,
+        params: Vec<Value>,
+        respond_to: oneshot::Sender<Result<Vec<Vec<Value>>, String>>,
+    },
+}
+
+async fn row_to_values(row: &turso::Row) -> Result<Vec<Value>> {
+    let mut values = Vec::new();
+    let column_count = row.column_count();
+    for i in 0..column_count {
+        let value = row.get_value(i)?;
+        values.push(value);
+    }
+    Ok(values)
 }
 
 const CREATE_DB: &str = r#"
@@ -203,8 +237,92 @@ impl Playlist {
 
 #[derive(Debug)]
 pub struct Library {
-    connection: Connection,
-    event_sender: Sender<LibraryEvent>,
+    db_sender: mpsc::Sender<DbCommand>,
+    event_sender: BroadcastSender<LibraryEvent>,
+}
+
+async fn db_worker(mut rx: mpsc::Receiver<DbCommand>, connection: Connection) {
+    'outer: while let Some(cmd) = rx.recv().await {
+        match cmd {
+            DbCommand::ExecuteBatch { sql, respond_to } => {
+                let result = connection
+                    .execute_batch(&sql)
+                    .await
+                    .map_err(|e| e.to_string());
+                let _ = respond_to.send(result);
+            }
+            DbCommand::Cacheflush { respond_to } => {
+                let result = connection.cacheflush().map_err(|e| e.to_string());
+                let _ = respond_to.send(result);
+            }
+            // these are a bit ugly and could use some macros 
+            // but turso's execute/query methods don't take slices directly
+            DbCommand::Execute {
+                sql,
+                params,
+                respond_to,
+            } => {
+                let result = match params.len() {
+                    0 => connection.execute(&sql, ()).await,
+                    1 => connection.execute(&sql, [params[0].clone()]).await,
+                    2 => connection.execute(&sql, [params[0].clone(), params[1].clone()]).await,
+                    3 => connection.execute(&sql, [params[0].clone(), params[1].clone(), params[2].clone()]).await,
+                    4 => connection.execute(&sql, [params[0].clone(), params[1].clone(), params[2].clone(), params[3].clone()]).await,
+                    5 => connection.execute(&sql, [params[0].clone(), params[1].clone(), params[2].clone(), params[3].clone(), params[4].clone()]).await,
+                    6 => connection.execute(&sql, [params[0].clone(), params[1].clone(), params[2].clone(), params[3].clone(), params[4].clone(), params[5].clone()]).await,
+                    7 => connection.execute(&sql, [params[0].clone(), params[1].clone(), params[2].clone(), params[3].clone(), params[4].clone(), params[5].clone(), params[6].clone()]).await,
+                    8 => connection.execute(&sql, [params[0].clone(), params[1].clone(), params[2].clone(), params[3].clone(), params[4].clone(), params[5].clone(), params[6].clone(), params[7].clone()]).await,
+                    _ => {
+                        let _ = respond_to.send(Err("Too many parameters".to_string()));
+                        continue;
+                    }
+                };
+                let _ = respond_to.send(result.map(|_| ()).map_err(|e| e.to_string()));
+            }
+            DbCommand::Query {
+                sql,
+                params,
+                respond_to,
+            } => {
+                let result = match params.len() {
+                    0 => connection.query(&sql, ()).await,
+                    1 => connection.query(&sql, [params[0].clone()]).await,
+                    2 => connection.query(&sql, [params[0].clone(), params[1].clone()]).await,
+                    3 => connection.query(&sql, [params[0].clone(), params[1].clone(), params[2].clone()]).await,
+                    4 => connection.query(&sql, [params[0].clone(), params[1].clone(), params[2].clone(), params[3].clone()]).await,
+                    5 => connection.query(&sql, [params[0].clone(), params[1].clone(), params[2].clone(), params[3].clone(), params[4].clone()]).await,
+                    6 => connection.query(&sql, [params[0].clone(), params[1].clone(), params[2].clone(), params[3].clone(), params[4].clone(), params[5].clone()]).await,
+                    7 => connection.query(&sql, [params[0].clone(), params[1].clone(), params[2].clone(), params[3].clone(), params[4].clone(), params[5].clone(), params[6].clone()]).await,
+                    8 => connection.query(&sql, [params[0].clone(), params[1].clone(), params[2].clone(), params[3].clone(), params[4].clone(), params[5].clone(), params[6].clone(), params[7].clone()]).await,
+                    _ => {
+                        let _ = respond_to.send(Err("Too many parameters".to_string()));
+                        continue;
+                    }
+                };
+                
+                match result {
+                    Ok(mut rows) => {
+                        let mut all_rows = Vec::new();
+                        while let Ok(Some(row)) = rows.next().await {
+                            let values = row_to_values(&row).await;
+                            let values = match values {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    let _ = respond_to.send(Err(e.to_string()));
+                                    continue 'outer;
+                                }
+                            };
+                            all_rows.push(values);
+                        }
+                        let _ = respond_to.send(Ok(all_rows));
+                    }
+                    Err(e) => {
+                        let _ = respond_to.send(Err(e.to_string()));
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl Library {
@@ -224,13 +342,22 @@ impl Library {
                 .build()
                 .await?
                 .connect()?;
-        connection
-            .execute_batch(CREATE_DB)
+        let (tx, rx) = mpsc::channel::<DbCommand>(100);
+        tokio::spawn(db_worker(rx, connection));
+        let (respond_tx, respond_rx) = oneshot::channel();
+        tx.send(DbCommand::ExecuteBatch {
+            sql: CREATE_DB.to_string(),
+            respond_to: respond_tx,
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to send command: {}", e))?;
+        respond_rx
             .await
+            .map_err(|e| anyhow::anyhow!("Failed to receive response: {}", e))?
             .map_err(|e| anyhow::anyhow!("Failed to create database: {}", e))?;
         let (event_sender, _) = channel::<LibraryEvent>(25);
         Ok(Self {
-            connection,
+            db_sender: tx,
             event_sender,
         })
     }
@@ -239,9 +366,98 @@ impl Library {
         self.event_sender.subscribe()
     }
 
-    pub fn write(&self) -> anyhow::Result<()> {
-        self.connection.cacheflush()?;
+    pub async fn write(&self) -> anyhow::Result<()> {
+        let (respond_tx, respond_rx) = oneshot::channel();
+        self.db_sender
+            .send(DbCommand::Cacheflush {
+                respond_to: respond_tx,
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to send command: {}", e))?;
+        respond_rx
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to receive response: {}", e))?
+            .map_err(|e| anyhow::anyhow!("Cacheflush failed: {}", e))?;
         Ok(())
+    }
+
+    async fn execute(&self, sql: &str, params: Vec<Value>) -> anyhow::Result<()> {
+        let (respond_tx, respond_rx) = oneshot::channel();
+        self.db_sender
+            .send(DbCommand::Execute {
+                sql: sql.to_string(),
+                params,
+                respond_to: respond_tx,
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to send command: {}", e))?;
+        respond_rx
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to receive response: {}", e))?
+            .map_err(|e| anyhow::anyhow!("Execute failed: {}", e))?;
+        Ok(())
+    }
+
+    async fn query(&self, sql: &str, params: Vec<Value>) -> Result<Vec<Vec<Value>>> {
+        let (respond_tx, respond_rx) = oneshot::channel();
+        self.db_sender
+            .send(DbCommand::Query {
+                sql: sql.to_string(),
+                params,
+                respond_to: respond_tx,
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to send command: {}", e))?;
+        
+        respond_rx
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to receive response: {}", e))?
+            .map_err(|e| anyhow::anyhow!("Query failed: {}", e))
+    }
+
+    fn get_string(value: &Value) -> Result<String> {
+        match value {
+            Value::Text(s) => Ok(s.clone()),
+            _ => Err(anyhow::anyhow!("Expected text value")),
+        }
+    }
+
+    fn get_optional_string(value: &Value) -> Option<String> {
+        match value {
+            Value::Text(s) => Some(s.clone()),
+            Value::Null => None,
+            _ => None,
+        }
+    }
+
+    fn get_i64(value: &Value) -> Result<i64> {
+        match value {
+            Value::Integer(i) => Ok(*i),
+            _ => Err(anyhow::anyhow!("Expected integer value")),
+        }
+    }
+
+    fn get_optional_i64(value: &Value) -> Option<i64> {
+        match value {
+            Value::Integer(i) => Some(*i),
+            Value::Null => None,
+            _ => None,
+        }
+    }
+
+    fn get_f64(value: &Value) -> Result<f64> {
+        match value {
+            Value::Real(f) => Ok(*f),
+            _ => Err(anyhow::anyhow!("Expected real value")),
+        }
+    }
+
+    fn get_optional_blob(value: &Value) -> Option<Vec<u8>> {
+        match value {
+            Value::Blob(b) => Some(b.clone()),
+            Value::Null => None,
+            _ => None,
+        }
     }
 
     /// Add an artist to the library, returns the artist (with existing id if already exists)
@@ -250,39 +466,30 @@ impl Library {
             return Ok(existing);
         }
 
-        self.connection
-            .execute(
-                "INSERT INTO artists (id, name) VALUES (?, ?)",
-                [
-                    Value::Text(artist.id.clone()),
-                    Value::Text(artist.name.clone()),
-                ],
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to insert artist: {}", e))?;
+        self.execute(
+            "INSERT INTO artists (id, name) VALUES (?, ?)",
+            vec![
+                Value::Text(artist.id.clone()),
+                Value::Text(artist.name.clone()),
+            ],
+        )
+        .await?;
 
         Ok(artist.clone())
     }
 
     /// Find an artist by ID
     pub async fn find_artist_by_id(&self, id: &str) -> anyhow::Result<Option<Artist>> {
-        let mut rows = self
-            .connection
-            .query("SELECT id, name FROM artists WHERE id = ?", [id])
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query artist: {}", e))?;
+        let rows = self
+            .query(
+                "SELECT id, name FROM artists WHERE id = ?",
+                vec![Value::Text(id.to_string())],
+            )
+            .await?;
 
-        if let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
-            let id: String = row
-                .get(0)
-                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let name: String = row
-                .get(1)
-                .map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
+        if let Some(row) = rows.first() {
+            let id = Self::get_string(&row[0])?;
+            let name = Self::get_string(&row[1])?;
             Ok(Some(Artist { id, name }))
         } else {
             Ok(None)
@@ -291,23 +498,16 @@ impl Library {
 
     /// Find an artist by name
     pub async fn find_artist_by_name(&self, name: &str) -> anyhow::Result<Option<Artist>> {
-        let mut rows = self
-            .connection
-            .query("SELECT id, name FROM artists WHERE name = ?", [name])
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query artist: {}", e))?;
+        let rows = self
+            .query(
+                "SELECT id, name FROM artists WHERE name = ?",
+                vec![Value::Text(name.to_string())],
+            )
+            .await?;
 
-        if let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
-            let id: String = row
-                .get(0)
-                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let name: String = row
-                .get(1)
-                .map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
+        if let Some(row) = rows.first() {
+            let id = Self::get_string(&row[0])?;
+            let name = Self::get_string(&row[1])?;
             Ok(Some(Artist { id, name }))
         } else {
             Ok(None)
@@ -316,24 +516,14 @@ impl Library {
 
     /// Get all artists
     pub async fn all_artists(&self) -> anyhow::Result<Vec<Artist>> {
-        let mut rows = self
-            .connection
-            .query("SELECT id, name FROM artists ORDER BY name", ())
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query artists: {}", e))?;
+        let rows = self
+            .query("SELECT id, name FROM artists ORDER BY name", vec![])
+            .await?;
 
         let mut artists = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
-            let id: String = row
-                .get(0)
-                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let name: String = row
-                .get(1)
-                .map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
+        for row in rows {
+            let id = Self::get_string(&row[0])?;
+            let name = Self::get_string(&row[1])?;
             artists.push(Artist { id, name });
         }
         Ok(artists)
@@ -345,35 +535,31 @@ impl Library {
             return Ok(existing);
         }
 
-        self.connection
-            .execute(
-                "INSERT INTO albums (id, title, release_year, album_art) VALUES (?, ?, ?, ?)",
-                [
-                    Value::Text(album.id.clone()),
-                    Value::Text(album.title.clone()),
-                    album
-                        .release_year
-                        .map(|y| Value::Integer(y as i64))
-                        .unwrap_or(Value::Null),
-                    album
-                        .album_art
-                        .clone()
-                        .map(Value::Blob)
-                        .unwrap_or(Value::Null),
-                ],
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to insert album: {}", e))?;
+        self.execute(
+            "INSERT INTO albums (id, title, release_year, album_art) VALUES (?, ?, ?, ?)",
+            vec![
+                Value::Text(album.id.clone()),
+                Value::Text(album.title.clone()),
+                album
+                    .release_year
+                    .map(|y| Value::Integer(y as i64))
+                    .unwrap_or(Value::Null),
+                album
+                    .album_art
+                    .clone()
+                    .map(Value::Blob)
+                    .unwrap_or(Value::Null),
+            ],
+        )
+        .await?;
 
         for artist in &album.artists {
             let artist = self.add_artist(artist).await?;
-            self.connection
-                .execute(
-                    "INSERT OR IGNORE INTO album_artists (album_id, artist_id) VALUES (?, ?)",
-                    [Value::Text(album.id.clone()), Value::Text(artist.id)],
-                )
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to insert album artist: {}", e))?;
+            self.execute(
+                "INSERT OR IGNORE INTO album_artists (album_id, artist_id) VALUES (?, ?)",
+                vec![Value::Text(album.id.clone()), Value::Text(artist.id)],
+            )
+            .await?;
         }
 
         Ok(album.clone())
@@ -381,33 +567,18 @@ impl Library {
 
     /// Find an album by ID
     pub async fn find_album_by_id(&self, id: &str) -> anyhow::Result<Option<Album>> {
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT id, title, release_year, album_art FROM albums WHERE id = ?",
-                [id],
+                vec![Value::Text(id.to_string())],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query album: {}", e))?;
+            .await?;
 
-        if let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
-            let id: String = row
-                .get(0)
-                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let title: String = row
-                .get(1)
-                .map_err(|e| anyhow::anyhow!("Failed to get title: {}", e))?;
-            let release_year: Option<i32> = row
-                .get::<Option<i64>>(2)
-                .map_err(|e| anyhow::anyhow!("Failed to get release_year: {}", e))?
-                .map(|y| y as i32);
-            let album_art: Option<Vec<u8>> = row
-                .get(3)
-                .map_err(|e| anyhow::anyhow!("Failed to get album_art: {}", e))?;
+        if let Some(row) = rows.first() {
+            let id = Self::get_string(&row[0])?;
+            let title = Self::get_string(&row[1])?;
+            let release_year = Self::get_optional_i64(&row[2]).map(|y| y as i32);
+            let album_art = Self::get_optional_blob(&row[3]);
 
             let artists = self.get_album_artists(&id).await?;
 
@@ -425,33 +596,18 @@ impl Library {
 
     /// Find an album by title
     pub async fn find_album_by_title(&self, title: &str) -> anyhow::Result<Option<Album>> {
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT id, title, release_year, album_art FROM albums WHERE title = ?",
-                [title],
+                vec![Value::Text(title.to_string())],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query album: {}", e))?;
+            .await?;
 
-        if let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
-            let id: String = row
-                .get(0)
-                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let title: String = row
-                .get(1)
-                .map_err(|e| anyhow::anyhow!("Failed to get title: {}", e))?;
-            let release_year: Option<i32> = row
-                .get::<Option<i64>>(2)
-                .map_err(|e| anyhow::anyhow!("Failed to get release_year: {}", e))?
-                .map(|y| y as i32);
-            let album_art: Option<Vec<u8>> = row
-                .get(3)
-                .map_err(|e| anyhow::anyhow!("Failed to get album_art: {}", e))?;
+        if let Some(row) = rows.first() {
+            let id = Self::get_string(&row[0])?;
+            let title = Self::get_string(&row[1])?;
+            let release_year = Self::get_optional_i64(&row[2]).map(|y| y as i32);
+            let album_art = Self::get_optional_blob(&row[3]);
 
             let artists = self.get_album_artists(&id).await?;
 
@@ -469,29 +625,19 @@ impl Library {
 
     /// Get artists for an album
     async fn get_album_artists(&self, album_id: &str) -> anyhow::Result<Vec<Artist>> {
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT a.id, a.name FROM artists a 
                  INNER JOIN album_artists aa ON a.id = aa.artist_id 
                  WHERE aa.album_id = ?",
-                [album_id],
+                vec![Value::Text(album_id.to_string())],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query album artists: {}", e))?;
+            .await?;
 
         let mut artists = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
-            let id: String = row
-                .get(0)
-                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let name: String = row
-                .get(1)
-                .map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
+        for row in rows {
+            let id = Self::get_string(&row[0])?;
+            let name = Self::get_string(&row[1])?;
             artists.push(Artist { id, name });
         }
         Ok(artists)
@@ -499,34 +645,19 @@ impl Library {
 
     /// Get all albums
     pub async fn all_albums(&self) -> anyhow::Result<Vec<Album>> {
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT id, title, release_year, album_art FROM albums ORDER BY title",
-                (),
+                vec![],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query albums: {}", e))?;
+            .await?;
 
         let mut albums = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
-            let id: String = row
-                .get(0)
-                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let title: String = row
-                .get(1)
-                .map_err(|e| anyhow::anyhow!("Failed to get title: {}", e))?;
-            let release_year: Option<i32> = row
-                .get::<Option<i64>>(2)
-                .map_err(|e| anyhow::anyhow!("Failed to get release_year: {}", e))?
-                .map(|y| y as i32);
-            let album_art: Option<Vec<u8>> = row
-                .get(3)
-                .map_err(|e| anyhow::anyhow!("Failed to get album_art: {}", e))?;
+        for row in rows {
+            let id = Self::get_string(&row[0])?;
+            let title = Self::get_string(&row[1])?;
+            let release_year = Self::get_optional_i64(&row[2]).map(|y| y as i32);
+            let album_art = Self::get_optional_blob(&row[3]);
 
             let artists = self.get_album_artists(&id).await?;
 
@@ -557,35 +688,38 @@ impl Library {
             artists_with_ids.push(artist);
         }
 
-        self.connection
-            .execute(
-                "INSERT INTO tracks (id, title, album_id, duration, path, source, source_id, track_number) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                [
-                    Value::Text(track.id.clone()),
-                    Value::Text(track.title.clone()),
-                    Value::Text(album.id.clone()),
-                    Value::Real(track.duration),
-                    track.path.clone().map(Value::Text).unwrap_or(Value::Null),
-                    Value::Text(track.source.as_str().to_string()),
-                    track.source_id.clone().map(Value::Text).unwrap_or(Value::Null),
-                    track.track_number.map(|n| Value::Integer(n as i64)).unwrap_or(Value::Null),
-                ],
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to insert track: {}", e))?;
+        self.execute(
+            "INSERT INTO tracks (id, title, album_id, duration, path, source, source_id, track_number) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            vec![
+                Value::Text(track.id.clone()),
+                Value::Text(track.title.clone()),
+                Value::Text(album.id.clone()),
+                Value::Real(track.duration),
+                track.path.clone().map(Value::Text).unwrap_or(Value::Null),
+                Value::Text(track.source.as_str().to_string()),
+                track
+                    .source_id
+                    .clone()
+                    .map(Value::Text)
+                    .unwrap_or(Value::Null),
+                track
+                    .track_number
+                    .map(|n| Value::Integer(n as i64))
+                    .unwrap_or(Value::Null),
+            ],
+        )
+        .await?;
 
         for artist in &artists_with_ids {
-            self.connection
-                .execute(
-                    "INSERT OR IGNORE INTO track_artists (track_id, artist_id) VALUES (?, ?)",
-                    [
-                        Value::Text(track.id.clone()),
-                        Value::Text(artist.id.clone()),
-                    ],
-                )
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to insert track artist: {}", e))?;
+            self.execute(
+                "INSERT OR IGNORE INTO track_artists (track_id, artist_id) VALUES (?, ?)",
+                vec![
+                    Value::Text(track.id.clone()),
+                    Value::Text(artist.id.clone()),
+                ],
+            )
+            .await?;
         }
 
         let mut result = track.clone();
@@ -607,21 +741,15 @@ impl Library {
 
     /// Find a track by ID
     pub async fn find_track_by_id(&self, id: &str) -> anyhow::Result<Option<Track>> {
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT id, title, album_id, duration, path, source, source_id, track_number 
                  FROM tracks WHERE id = ?",
-                [id],
+                vec![Value::Text(id.to_string())],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query track: {}", e))?;
+            .await?;
 
-        if let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
+        if let Some(row) = rows.first() {
             self.row_to_track(&row).await.map(Some)
         } else {
             Ok(None)
@@ -634,21 +762,18 @@ impl Library {
         source: TrackSource,
         id: &str,
     ) -> anyhow::Result<Option<Track>> {
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT id, title, album_id, duration, path, source, source_id, track_number 
                  FROM tracks WHERE source = ? AND source_id = ?",
-                [source.as_str(), id],
+                vec![
+                    Value::Text(source.as_str().to_string()),
+                    Value::Text(id.to_string()),
+                ],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query track: {}", e))?;
+            .await?;
 
-        if let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
+        if let Some(row) = rows.first() {
             self.row_to_track(&row).await.map(Some)
         } else {
             Ok(None)
@@ -657,22 +782,16 @@ impl Library {
 
     /// Find tracks by source
     pub async fn find_tracks_by_source(&self, source: TrackSource) -> anyhow::Result<Vec<Track>> {
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT id, title, album_id, duration, path, source, source_id, track_number 
                  FROM tracks WHERE source = ?",
-                [source.as_str()],
+                vec![Value::Text(source.as_str().to_string())],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query tracks: {}", e))?;
+            .await?;
 
         let mut tracks = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
+        for row in rows {
             tracks.push(self.row_to_track(&row).await?);
         }
         Ok(tracks)
@@ -680,22 +799,16 @@ impl Library {
 
     /// Get all tracks in the library
     pub async fn all_tracks(&self) -> anyhow::Result<Vec<Track>> {
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT id, title, album_id, duration, path, source, source_id, track_number 
                  FROM tracks ORDER BY title",
-                (),
+                vec![],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query tracks: {}", e))?;
+            .await?;
 
         let mut tracks = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
+        for row in rows {
             tracks.push(self.row_to_track(&row).await?);
         }
         Ok(tracks)
@@ -703,25 +816,19 @@ impl Library {
 
     /// Get all tracks not in any playlist
     pub async fn all_unorganized_tracks(&self) -> anyhow::Result<Vec<Track>> {
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT t.id, t.title, t.album_id, t.duration, t.path, t.source, t.source_id, t.track_number 
                  FROM tracks t
                  LEFT JOIN playlist_tracks pt ON t.id = pt.track_id
                  WHERE pt.track_id IS NULL
                  ORDER BY t.title",
-                (),
+                vec![],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query unorganized tracks: {}", e))?;
+            .await?;
 
         let mut tracks = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
+        for row in rows {
             tracks.push(self.row_to_track(&row).await?);
         }
         Ok(tracks)
@@ -729,61 +836,34 @@ impl Library {
 
     /// Get artists for a track
     async fn get_track_artists(&self, track_id: &str) -> anyhow::Result<Vec<Artist>> {
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT a.id, a.name FROM artists a 
                  INNER JOIN track_artists ta ON a.id = ta.artist_id 
                  WHERE ta.track_id = ?",
-                [track_id],
+                vec![Value::Text(track_id.to_string())],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query track artists: {}", e))?;
+            .await?;
 
         let mut artists = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
-            let id: String = row
-                .get(0)
-                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let name: String = row
-                .get(1)
-                .map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
+        for row in rows {
+            let id = Self::get_string(&row[0])?;
+            let name = Self::get_string(&row[1])?;
             artists.push(Artist { id, name });
         }
         Ok(artists)
     }
 
     /// Convert a database row to a Track
-    async fn row_to_track(&self, row: &turso::Row) -> anyhow::Result<Track> {
-        let id: String = row
-            .get(0)
-            .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-        let title: String = row
-            .get(1)
-            .map_err(|e| anyhow::anyhow!("Failed to get title: {}", e))?;
-        let album_id: String = row
-            .get(2)
-            .map_err(|e| anyhow::anyhow!("Failed to get album_id: {}", e))?;
-        let duration: f64 = row
-            .get(3)
-            .map_err(|e| anyhow::anyhow!("Failed to get duration: {}", e))?;
-        let path: Option<String> = row
-            .get(4)
-            .map_err(|e| anyhow::anyhow!("Failed to get path: {}", e))?;
-        let source_str: String = row
-            .get(5)
-            .map_err(|e| anyhow::anyhow!("Failed to get source: {}", e))?;
-        let source_id: Option<String> = row
-            .get(6)
-            .map_err(|e| anyhow::anyhow!("Failed to get source_id: {}", e))?;
-        let track_number: Option<i32> = row
-            .get::<Option<i64>>(7)
-            .map_err(|e| anyhow::anyhow!("Failed to get track_number: {}", e))?
-            .map(|n| n as i32);
+    async fn row_to_track(&self, row: &Vec<Value>) -> anyhow::Result<Track> {
+        let id = Self::get_string(&row[0])?;
+        let title = Self::get_string(&row[1])?;
+        let album_id = Self::get_string(&row[2])?;
+        let duration = Self::get_f64(&row[3])?;
+        let path = Self::get_optional_string(&row[4]);
+        let source_str = Self::get_string(&row[5])?;
+        let source_id = Self::get_optional_string(&row[6]);
+        let track_number = Self::get_optional_i64(&row[7]).map(|n| n as i32);
 
         let source = TrackSource::from_str(&source_str)
             .ok_or_else(|| anyhow::anyhow!("Invalid track source: {}", source_str))?;
@@ -809,59 +889,46 @@ impl Library {
 
     /// Delete a track by ID
     pub async fn delete_track(&self, id: &str) -> anyhow::Result<()> {
-        self.connection
-            .execute("DELETE FROM tracks WHERE id = ?", [id])
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to delete track: {}", e))?;
+        self.execute(
+            "DELETE FROM tracks WHERE id = ?",
+            vec![Value::Text(id.to_string())],
+        )
+        .await?;
         Ok(())
     }
 
     /// Create a new playlist
     pub async fn create_playlist(&self, playlist: &Playlist) -> anyhow::Result<Playlist> {
-        self.connection
-            .execute(
-                "INSERT INTO playlists (id, name, description) VALUES (?, ?, ?)",
-                [
-                    Value::Text(playlist.id.clone()),
-                    Value::Text(playlist.name.clone()),
-                    playlist
-                        .description
-                        .clone()
-                        .map(Value::Text)
-                        .unwrap_or(Value::Null),
-                ],
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to create playlist: {}", e))?;
+        self.execute(
+            "INSERT INTO playlists (id, name, description) VALUES (?, ?, ?)",
+            vec![
+                Value::Text(playlist.id.clone()),
+                Value::Text(playlist.name.clone()),
+                playlist
+                    .description
+                    .clone()
+                    .map(Value::Text)
+                    .unwrap_or(Value::Null),
+            ],
+        )
+        .await?;
 
         Ok(playlist.clone())
     }
 
     /// Find a playlist by ID
     pub async fn find_playlist_by_id(&self, id: &str) -> anyhow::Result<Option<Playlist>> {
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT id, name, description FROM playlists WHERE id = ?",
-                [id],
+                vec![Value::Text(id.to_string())],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query playlist: {}", e))?;
+            .await?;
 
-        if let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
-            let id: String = row
-                .get(0)
-                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let name: String = row
-                .get(1)
-                .map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
-            let description: Option<String> = row
-                .get(2)
-                .map_err(|e| anyhow::anyhow!("Failed to get description: {}", e))?;
+        if let Some(row) = rows.first() {
+            let id = Self::get_string(&row[0])?;
+            let name = Self::get_string(&row[1])?;
+            let description = Self::get_optional_string(&row[2]);
 
             let tracks = self.get_playlist_tracks(&id).await?;
 
@@ -878,30 +945,18 @@ impl Library {
 
     /// Get all playlists
     pub async fn all_playlists(&self) -> anyhow::Result<Vec<Playlist>> {
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT id, name, description FROM playlists ORDER BY name",
-                (),
+                vec![],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query playlists: {}", e))?;
+            .await?;
 
         let mut playlists = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
-            let id: String = row
-                .get(0)
-                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let name: String = row
-                .get(1)
-                .map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
-            let description: Option<String> = row
-                .get(2)
-                .map_err(|e| anyhow::anyhow!("Failed to get description: {}", e))?;
+        for row in rows {
+            let id = Self::get_string(&row[0])?;
+            let name = Self::get_string(&row[1])?;
+            let description = Self::get_optional_string(&row[2]);
 
             let tracks = self.get_playlist_tracks(&id).await?;
 
@@ -917,25 +972,19 @@ impl Library {
 
     /// Get tracks in a playlist
     async fn get_playlist_tracks(&self, playlist_id: &str) -> anyhow::Result<Vec<Track>> {
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT t.id, t.title, t.album_id, t.duration, t.path, t.source, t.source_id, t.track_number 
                  FROM tracks t
                  INNER JOIN playlist_tracks pt ON t.id = pt.track_id
                  WHERE pt.playlist_id = ?
                  ORDER BY pt.position",
-                [playlist_id],
+                vec![Value::Text(playlist_id.to_string())],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query playlist tracks: {}", e))?;
+            .await?;
 
         let mut tracks = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
+        for row in rows {
             tracks.push(self.row_to_track(&row).await?);
         }
         Ok(tracks)
@@ -947,36 +996,28 @@ impl Library {
         playlist_id: &str,
         track_id: &str,
     ) -> anyhow::Result<()> {
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT COALESCE(MAX(position), 0) + 1 FROM playlist_tracks WHERE playlist_id = ?",
-                [playlist_id],
+                vec![Value::Text(playlist_id.to_string())],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get next position: {}", e))?;
+            .await?;
 
-        let position: i64 = if let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
-            row.get(0).unwrap_or(1)
+        let position: i64 = if let Some(row) = rows.first() {
+            Self::get_i64(&row[0]).unwrap_or(1)
         } else {
             1
         };
 
-        self.connection
-            .execute(
-                "INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)",
-                [
-                    Value::Text(playlist_id.to_string()),
-                    Value::Text(track_id.to_string()),
-                    Value::Integer(position),
-                ],
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to add track to playlist: {}", e))?;
+        self.execute(
+            "INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)",
+            vec![
+                Value::Text(playlist_id.to_string()),
+                Value::Text(track_id.to_string()),
+                Value::Integer(position),
+            ],
+        )
+        .await?;
 
         Ok(())
     }
@@ -987,65 +1028,59 @@ impl Library {
         playlist_id: &str,
         track_id: &str,
     ) -> anyhow::Result<()> {
-        self.connection
-            .execute(
-                "DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?",
-                [playlist_id, track_id],
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to remove track from playlist: {}", e))?;
+        self.execute(
+            "DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?",
+            vec![
+                Value::Text(playlist_id.to_string()),
+                Value::Text(track_id.to_string()),
+            ],
+        )
+        .await?;
 
         Ok(())
     }
 
     /// Delete a playlist
     pub async fn delete_playlist(&self, id: &str) -> anyhow::Result<()> {
-        self.connection
-            .execute("DELETE FROM playlists WHERE id = ?", [id])
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to delete playlist: {}", e))?;
+        self.execute(
+            "DELETE FROM playlists WHERE id = ?",
+            vec![Value::Text(id.to_string())],
+        )
+        .await?;
         Ok(())
     }
 
     /// Update a playlist
     pub async fn update_playlist(&self, playlist: &Playlist) -> anyhow::Result<()> {
-        self.connection
-            .execute(
-                "UPDATE playlists SET name = ?, description = ? WHERE id = ?",
-                [
-                    Value::Text(playlist.name.clone()),
-                    playlist
-                        .description
-                        .clone()
-                        .map(Value::Text)
-                        .unwrap_or(Value::Null),
-                    Value::Text(playlist.id.clone()),
-                ],
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to update playlist: {}", e))?;
+        self.execute(
+            "UPDATE playlists SET name = ?, description = ? WHERE id = ?",
+            vec![
+                Value::Text(playlist.name.clone()),
+                playlist
+                    .description
+                    .clone()
+                    .map(Value::Text)
+                    .unwrap_or(Value::Null),
+                Value::Text(playlist.id.clone()),
+            ],
+        )
+        .await?;
         Ok(())
     }
 
     /// Search tracks by title
     pub async fn search_tracks(&self, query: &str) -> anyhow::Result<Vec<Track>> {
         let pattern = format!("%{}%", query);
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT id, title, album_id, duration, path, source, source_id, track_number 
                  FROM tracks WHERE title LIKE ? ORDER BY title",
-                [pattern.as_str()],
+                vec![Value::Text(pattern)],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to search tracks: {}", e))?;
+            .await?;
 
         let mut tracks = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
+        for row in rows {
             tracks.push(self.row_to_track(&row).await?);
         }
         Ok(tracks)
@@ -1054,27 +1089,17 @@ impl Library {
     /// Search artists by name
     pub async fn search_artists(&self, query: &str) -> anyhow::Result<Vec<Artist>> {
         let pattern = format!("%{}%", query);
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT id, name FROM artists WHERE name LIKE ? ORDER BY name",
-                [pattern.as_str()],
+                vec![Value::Text(pattern)],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to search artists: {}", e))?;
+            .await?;
 
         let mut artists = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
-            let id: String = row
-                .get(0)
-                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let name: String = row
-                .get(1)
-                .map_err(|e| anyhow::anyhow!("Failed to get name: {}", e))?;
+        for row in rows {
+            let id = Self::get_string(&row[0])?;
+            let name = Self::get_string(&row[1])?;
             artists.push(Artist { id, name });
         }
         Ok(artists)
@@ -1083,34 +1108,19 @@ impl Library {
     /// Search albums by title
     pub async fn search_albums(&self, query: &str) -> anyhow::Result<Vec<Album>> {
         let pattern = format!("%{}%", query);
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT id, title, release_year, album_art FROM albums WHERE title LIKE ? ORDER BY title",
-                [pattern.as_str()],
+                vec![Value::Text(pattern)],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to search albums: {}", e))?;
+            .await?;
 
         let mut albums = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
-            let id: String = row
-                .get(0)
-                .map_err(|e| anyhow::anyhow!("Failed to get id: {}", e))?;
-            let title: String = row
-                .get(1)
-                .map_err(|e| anyhow::anyhow!("Failed to get title: {}", e))?;
-            let release_year: Option<i32> = row
-                .get::<Option<i64>>(2)
-                .map_err(|e| anyhow::anyhow!("Failed to get release_year: {}", e))?
-                .map(|y| y as i32);
-            let album_art: Option<Vec<u8>> = row
-                .get(3)
-                .map_err(|e| anyhow::anyhow!("Failed to get album_art: {}", e))?;
+        for row in rows {
+            let id = Self::get_string(&row[0])?;
+            let title = Self::get_string(&row[1])?;
+            let release_year = Self::get_optional_i64(&row[2]).map(|y| y as i32);
+            let album_art = Self::get_optional_blob(&row[3]);
 
             let artists = self.get_album_artists(&id).await?;
 
@@ -1127,22 +1137,16 @@ impl Library {
 
     /// Get tracks by album
     pub async fn get_tracks_by_album(&self, album_id: &str) -> anyhow::Result<Vec<Track>> {
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT id, title, album_id, duration, path, source, source_id, track_number 
                  FROM tracks WHERE album_id = ? ORDER BY track_number, title",
-                [album_id],
+                vec![Value::Text(album_id.to_string())],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query tracks by album: {}", e))?;
+            .await?;
 
         let mut tracks = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
+        for row in rows {
             tracks.push(self.row_to_track(&row).await?);
         }
         Ok(tracks)
@@ -1150,25 +1154,19 @@ impl Library {
 
     /// Get tracks by artist
     pub async fn get_tracks_by_artist(&self, artist_id: &str) -> anyhow::Result<Vec<Track>> {
-        let mut rows = self
-            .connection
+        let rows = self
             .query(
                 "SELECT t.id, t.title, t.album_id, t.duration, t.path, t.source, t.source_id, t.track_number 
                  FROM tracks t
                  INNER JOIN track_artists ta ON t.id = ta.track_id
                  WHERE ta.artist_id = ?
                  ORDER BY t.title",
-                [artist_id],
+                vec![Value::Text(artist_id.to_string())],
             )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query tracks by artist: {}", e))?;
+            .await?;
 
         let mut tracks = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch row: {}", e))?
-        {
+        for row in rows {
             tracks.push(self.row_to_track(&row).await?);
         }
         Ok(tracks)
