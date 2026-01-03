@@ -59,10 +59,8 @@ impl SearchView {
         let track_list = cx.new(|cx| TrackList::new(window, cx, initial_delegate));
         let x = track_list.clone();
         let on_play_for_search = on_play_callback.clone();
-        let _s = vec![cx.subscribe_in(
-            &input_state,
-            window,
-            move |_, state, event, _, cx| {
+        let _s = vec![
+            cx.subscribe_in(&input_state, window, move |_, state, event, _, cx| {
                 let y = x.clone();
                 let on_play = on_play_for_search.clone();
                 match event {
@@ -100,8 +98,8 @@ impl SearchView {
                     }
                     _ => {}
                 }
-            },
-        )];
+            }),
+        ];
         Self {
             input_state,
             track_list,

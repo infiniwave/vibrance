@@ -1,5 +1,6 @@
 use gpui::{
-    AppContext, ClickEvent, Entity, IntoElement, PathPromptOptions, Render, SharedString, Styled, Window, rgba,
+    AppContext, ClickEvent, Entity, IntoElement, PathPromptOptions, Render, SharedString, Styled,
+    Window, rgba,
 };
 use gpui_component::{
     Side,
@@ -8,11 +9,7 @@ use gpui_component::{
 use tokio::task;
 use walkdir::WalkDir;
 
-use crate::{
-    components::icon::Icon,
-    library::LIBRARY,
-    providers::local,
-};
+use crate::{components::icon::Icon, library::LIBRARY, providers::local};
 
 pub struct Sidebar {
     pub navigation_state: Entity<NavigationState>,
@@ -121,20 +118,22 @@ impl Sidebar {
         });
         cx.spawn(async move |_, _| {
             let paths = path_future.await.ok().and_then(|r| r.ok()).and_then(|p| p);
-            if let Some(paths) = paths 
-            && let Some(dir) = paths.first() {
+            if let Some(paths) = paths
+                && let Some(dir) = paths.first()
+            {
                 let dir = dir.clone();
                 task::spawn(async move {
                     let library = LIBRARY.get().expect("Library not initialized");
                     for entry in WalkDir::new(&dir)
                         .follow_links(true)
                         .into_iter()
-                        .filter_map(|e| e.ok()) {
+                        .filter_map(|e| e.ok())
+                    {
                         if entry.file_type().is_file() {
-                            if let Some(ext) = entry.path().extension() 
-                            && SUPPORTED_EXTENSIONS
-                                .iter()
-                                .any(|&e| e.eq_ignore_ascii_case(ext.to_str().unwrap_or("")))
+                            if let Some(ext) = entry.path().extension()
+                                && SUPPORTED_EXTENSIONS
+                                    .iter()
+                                    .any(|&e| e.eq_ignore_ascii_case(ext.to_str().unwrap_or("")))
                             {
                                 match local::resolve_track(entry.path().to_str().unwrap_or("")) {
                                     Ok(track) => {
@@ -143,7 +142,11 @@ impl Sidebar {
                                         }
                                     }
                                     Err(e) => {
-                                        eprintln!("Failed to resolve track {}: {}",entry.path().display(),e);
+                                        eprintln!(
+                                            "Failed to resolve track {}: {}",
+                                            entry.path().display(),
+                                            e
+                                        );
                                     }
                                 }
                             }
