@@ -29,6 +29,7 @@ souvlaki = { git = "https://github.com/Sinono3/souvlaki.git", branch = "0.9" }
 tokio = { version = "1.48.0", default-features = false, features = ["rt-multi-thread", "macros"] }
 turso = "0.3.2"
 ulid = "1.2.1"
+walkdir = "2.5.0"
 
 [build-dependencies]
 winres = "0.1.12"

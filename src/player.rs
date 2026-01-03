@@ -1,8 +1,8 @@
-use std::{fs::File, path::PathBuf, time::Duration};
+use std::time::Duration;
 
 use chrono::Utc;
 use once_cell::sync::OnceCell;
-use rodio::{Decoder, OutputStreamBuilder, Sink, Source};
+use rodio::{OutputStreamBuilder, Sink, Source};
 use tokio::{
     sync::{
         broadcast::{Receiver, Sender, channel},
@@ -56,7 +56,7 @@ pub enum PlayerEvent {
 impl Player {
     pub fn new(volume: f32) -> Self {
         let (in_cmd, mut out_cmd) = unbounded_channel::<PlayerCommand>();
-        let (in_evt, out_evt) = channel::<PlayerEvent>(25);
+        let (in_evt, _) = channel::<PlayerEvent>(25);
         let in_evt_clone = in_evt.clone();
         task::spawn(async move {
             let stream = OutputStreamBuilder::open_default_stream().unwrap();

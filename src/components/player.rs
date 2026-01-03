@@ -59,7 +59,7 @@ impl Player {
 
         cx.subscribe(
             &volume_state,
-            |this: &mut Self, _, event: &SliderEvent, cx| {
+            |_: &mut Self, _, event: &SliderEvent, cx| {
                 let SliderEvent::Change(value) = event;
                 let position = value.end() / 100.0; // convert from 0-100 to 0-1
                 if let Some(player) = PLAYER.get() {
@@ -75,7 +75,7 @@ impl Player {
             let player = PLAYER.get().expect("Player not initialized");
             let mut receiver = player.out_evt_receiver();
             if let Some(this_entity) = this.upgrade() {
-                let _ = cx.update_entity(&this_entity, |player_component: &mut Player, cx| {
+                let _ = cx.update_entity(&this_entity, |player_component: &mut Player, _| {
                     player_component.cmd_sender = Some(player.in_cmd.clone());
                 });
             }

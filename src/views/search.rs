@@ -62,14 +62,14 @@ impl SearchView {
         let _s = vec![cx.subscribe_in(
             &input_state,
             window,
-            move |view, state, event, window, cx| {
+            move |_, state, event, _, cx| {
                 let y = x.clone();
                 let on_play = on_play_for_search.clone();
                 match event {
-                    InputEvent::PressEnter { secondary } => {
+                    InputEvent::PressEnter { .. } => {
                         let query = state.read(cx).value().trim().to_string();
                         println!("Searching for: {}", query);
-                        cx.spawn(async move |e, app| {
+                        cx.spawn(async move |_, app| {
                             println!("Searching for: {}", query);
                             // spawn the search on tokio's runtime to avoid conflicts with gpui's executor
                             let search_result = task::spawn(async move {
@@ -113,8 +113,8 @@ impl SearchView {
 impl Render for SearchView {
     fn render(
         &mut self,
-        window: &mut gpui::Window,
-        cx: &mut gpui::Context<'_, Self>,
+        _: &mut gpui::Window,
+        _: &mut gpui::Context<'_, Self>,
     ) -> impl IntoElement {
         gpui::div()
             .w_full()

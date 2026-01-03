@@ -8166,6 +8166,7 @@ dependencies = [
  "tokio",
  "turso",
  "ulid",
+ "walkdir",
  "winres",
 ]
 

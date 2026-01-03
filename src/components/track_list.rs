@@ -162,8 +162,8 @@ impl<T: RenderedTrack> TrackList<T> {
 impl<T: RenderedTrack> Render for TrackList<T> {
     fn render(
         &mut self,
-        window: &mut gpui::Window,
-        cx: &mut gpui::Context<'_, Self>,
+        _: &mut gpui::Window,
+        _: &mut gpui::Context<'_, Self>,
     ) -> impl IntoElement {
         gpui::div()
             .bg(rgba(0x00000000)) // 9f
