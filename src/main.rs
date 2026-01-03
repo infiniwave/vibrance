@@ -133,7 +133,7 @@ async fn main() {
         loop {
             time::sleep(std::time::Duration::from_secs(60)).await;
             let library = LIBRARY.get().expect("Library not initialized");
-            library.write().expect("Failed to write library to disk");
+            library.write().await.expect("Failed to write library to disk");
             let preferences = PREFERENCES
                 .get()
                 .expect("Preferences not initialized")
@@ -276,7 +276,7 @@ async fn main() {
                     rt.block_on(async {
                         // Save preferences before exiting
                         let library = LIBRARY.get().expect("Library not initialized");
-                        library.write().expect("Failed to write library to disk");
+                        library.write().await.expect("Failed to write library to disk");
                         if let Some(preferences_mutex) = PREFERENCES.get() {
                             let preferences = preferences_mutex.read().await;
                             if let Err(e) = preferences.save().await {
