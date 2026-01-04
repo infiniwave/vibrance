@@ -14,7 +14,7 @@ use std::{path::PathBuf, time::Duration};
 use gpui::*;
 use gpui_component::*;
 use once_cell::sync::OnceCell;
-use souvlaki::{MediaMetadata, MediaPlayback, OsMediaControls};
+use souvlaki::{MediaMetadata, MediaPlayback, MediaPosition, OsMediaControls};
 use tokio::{
     sync::{Mutex, RwLock},
     task, time,
@@ -160,7 +160,17 @@ async fn main() {
         while let Ok(event) = recv.recv().await {
             match event {
                 PlayerEvent::Progress(progress_value, len) => {
-                    // TODO: Update media controls progress
+                    let mut controls = CONTROLS
+                        .get()
+                        .expect("Media controls not initialized")
+                        .lock()
+                        .await;
+                    controls.set_playback(MediaPlayback::Playing {
+                        progress: Some(MediaPosition(Duration::from_secs_f32(progress_value * len))),
+                    }).unwrap_or_else(|e| {
+                        eprintln!("Failed to set playback progress: {:?}", e);
+                    });
+                    drop(controls);
                     println!("Progress: {}", progress_value);
                 }
                 PlayerEvent::End => {}
